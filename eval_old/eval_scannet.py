@@ -74,6 +74,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     torch.manual_seed(33)
+    np.random.seed(0)
 
     # Scene sampling
     scannet_scenes = get_all_scenes(args.data_dir, args.num_scenes)
@@ -156,6 +157,14 @@ if __name__ == "__main__":
                 model, vgg_input, dtype, args.depth_conf_thresh, image_paths
             )
             print(f"Inference time: {inference_time_ms:.2f}ms")
+
+            merged_points = np.vstack(all_world_points)
+            if merged_points.shape[0] > 999999:
+                sample_indices = np.random.choice(
+                    merged_points.shape[0], 999999, replace=False
+                )
+                merged_points = merged_points[sample_indices]
+            all_world_points = [merged_points]
 
             # Process results
             if not all_cam_to_world_mat or not all_world_points:
