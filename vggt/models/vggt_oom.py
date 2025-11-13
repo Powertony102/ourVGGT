@@ -288,13 +288,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 Bx, Nx, _ = similarity.shape
                 eye = torch.eye(Nx, device=similarity.device, dtype=similarity.dtype).unsqueeze(0).expand(Bx, -1, -1)
                 similarity = similarity * (1 - eye) + eye
-            del images_norm, imgs_flat, patch_tokens, patches_sel, pooled
-            if "sim_row" in locals():
-                del sim_row
-            if "eye" in locals():
-                del eye
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
         _timer_end(t_sim, "similarity_compute")
 
         # Compute average neighbors per frame above a similarity threshold
@@ -311,14 +304,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 avg_neighbors_per_frame = counts_per_frame.mean()
             else:
                 avg_neighbors_per_frame = torch.tensor(0.0)
-        if "eye_mask" in locals():
-            del eye_mask
-        if "above" in locals():
-            del above
-        if "counts_per_frame" in locals():
-            del counts_per_frame
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
         # Print the statistic and keep for output dictionary later
         try:
             print(f"[Similarity] sim_thres={sim_thres:.3f}; avg>thres/frame: {avg_neighbors_per_frame.item():.3f}")
@@ -329,7 +314,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         Nx = similarity.shape[1]
         k_auto = int(torch.floor(avg_neighbors_per_frame).item())
         k_auto = max(1, min(k_auto, Nx))
-        num_groups = min(8, k_auto)
+        num_groups = min(5, k_auto)
         print(f"[Partitions] Auto num_groups from similarity: {num_groups}")
 
 
@@ -348,9 +333,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 log_interval=50,
             )
         _timer_end(t_opt, "partition_optimize")
-        del similarity
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
         K = int(num_groups)
         Lg = int(scene_partition_results[0]["Lg"]) if S > 1 else 0
@@ -381,9 +363,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
             j_sel = min_pos % Lg
             restore_k[:, 1:] = k_sel
             restore_s[:, 1:] = j_sel + 1  # shift by 1 because grouped pos 0 is frame0
-            del frames, mask, masked_pos, min_pos, k_sel, j_sel, ids_flat, pos
         # frame 0 maps to (0,0) by initialization
-        del scene_partition_results
 
         # Build grouped image tensor (B, K, S_eff, 3, H, W): [frame0] + frames by padded indices (+1)
         t_group = _timer_start()
@@ -397,13 +377,11 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
             for b in range(B):
                 grouped_b = [images[b].index_select(0, idx_seq_all[b, k]) for k in range(K)]
                 images_grouped.append(torch.stack(grouped_b, dim=0))
-            del zero_idx
         else:
             for b in range(B):
                 images_grouped.append(images[b:b+1].expand(K, -1, -1, -1, -1))
         images_grouped = torch.stack(images_grouped, dim=0)  # (B, K, S_eff, 3, H, W)
         images_eff = images_grouped.view(BK, S_eff, C_in, H, W)
-        del images_grouped
         _timer_end(t_group, "group_build")
 
         # Build grouped patch tokens directly from precomputed patches (avoid re-embedding)
@@ -418,13 +396,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 patches_grouped.append(patches_bspc[b:b+1].expand(K, -1, -1, -1))
         patches_grouped = torch.stack(patches_grouped, dim=0)  # (B, K, S_eff, Pp, Cc)
         patches_eff = patches_grouped.view(BK, S_eff, Pp, Cc)
-        del patches_grouped, patches_bspc
-        if "idx_seq_all" in locals():
-            del idx_seq_all
-        if "ids_img_all" in locals():
-            del ids_img_all
-        if "ids_all" in locals():
-            del ids_all
         _timer_end(t_group_pe, "group_build.patch_tokens")
 
         # Run aggregator on grouped patch tokens (skip internal patch_embed)
@@ -433,9 +404,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
             images=None, patch_tokens_bspc=patches_eff, hw=(H, W)
         )
         _timer_end(t_agg, "aggregator_forward")
-        del patches_eff
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
         # Helper to restore (BK, S_eff, ...) -> (B, S, ...) using precomputed indices
         def restore_sequence(z_eff: torch.Tensor) -> torch.Tensor:
@@ -512,17 +480,8 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 else:
                     predictions[key] = restore_sequence(tensor_eff)
             _timer_end(t_rest, f"{name}.restore")
-        heads.clear()
-        del heads
-        if "query_points_eff" in locals():
-            del query_points_eff
-        del aggregated_tokens_list_eff
-        del restore_k, restore_s, restore_sequence
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
 
         if not self.training:
             predictions["images"] = images  # keep original images for viz
-        del images_eff
 
         return predictions
