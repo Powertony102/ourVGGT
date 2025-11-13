@@ -329,7 +329,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         Nx = similarity.shape[1]
         k_auto = int(torch.floor(avg_neighbors_per_frame).item())
         k_auto = max(1, min(k_auto, Nx))
-        num_groups = min(8, k_auto)
+        num_groups = min(5, k_auto)
         print(f"[Partitions] Auto num_groups from similarity: {num_groups}")
 
 
