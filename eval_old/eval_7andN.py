@@ -6,6 +6,10 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+FAST3R_DIR = os.path.abspath(os.path.join(ROOT_DIR, "fast3r", "fast3r"))
+if FAST3R_DIR not in sys.path:
+    sys.path.insert(0, FAST3R_DIR)
+
 import time
 import torch
 import argparse
@@ -24,7 +28,7 @@ def get_args_parser():
     parser.add_argument(
         "--ckpt_path",
         type=str,
-        default="/root/autodl-tmp/models/model_tracker_fixed_e20.pt",
+        default="./ckpt/model_tracker_fixed_e20.pt",
         help="ckpt name",
     )
     parser.add_argument("--device", type=str, default="cuda:0", help="device")
@@ -35,7 +39,7 @@ def get_args_parser():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/root/autodl-tmp/outputs/eval_7andN/",
+        default="./outputs/eval_7andN/",
         help="value for outdir",
     )
     parser.add_argument("--size", type=int, default=518)
@@ -74,7 +78,7 @@ def main(args):
         # ),  # 20),
         "NRGBD": NRGBD(
             split="test",
-            ROOT="/root/autodl-tmp/data/neural_rgbd_data/",
+            ROOT="/home/jovyan/shared/xinzeli/fastplus/nrgbd/",
             resolution=resolution,
             num_seq=1,
             full_video=True,
@@ -90,21 +94,26 @@ def main(args):
     from vggt.utils.geometry import unproject_depth_map_to_point_map
     from criterion import Regr3D_t_ScaleShiftInv, L21
 
-    # Force use of bf16 data type
     dtype = torch.bfloat16
-    # Load VGGT model
-    model = VGGT(merging=args.merging, enable_point=True)
-    ckpt = torch.load(args.ckpt_path, map_location="cpu")
+    if model_name.upper() == "VGGT":
+        model = VGGT(merging=args.merging, enable_point=True)
+        ckpt = torch.load(args.ckpt_path, map_location="cpu")
+        model.load_state_dict(ckpt, strict=False)
+        model = model.cuda().eval()
+        model = model.to(torch.bfloat16)
+        del ckpt
+    elif model_name.upper() == "FAST3R":
+        from fast3r.dust3r.inference_multiview import inference as fast3r_inference
+        from fast3r.models.fast3r import Fast3R
+        from fast3r.models.multiview_dust3r_module import MultiViewDUSt3RLitModule
 
-    # ✅ Fix: load pre-trained weights
-    model.load_state_dict(
-        ckpt, strict=False
-    )  # Use strict=False due to enable_point=True difference
-
-    model = model.cuda().eval()
-    model = model.to(torch.bfloat16)
-
-    del ckpt
+        device_obj = torch.device(device.split(":")[0])
+        model = Fast3R.from_pretrained("jedyang97/Fast3R_ViT_Large_512")
+        model = model.to(device_obj).eval()
+        lit_module = MultiViewDUSt3RLitModule.load_for_inference(model)
+        lit_module.eval()
+    else:
+        raise ValueError(f"Unsupported model_name: {model_name}")
     os.makedirs(osp.join(args.output_dir, f"{args.kf}"), exist_ok=True)
 
     criterion = Regr3D_t_ScaleShiftInv(L21, norm_mode=False, gt_scale=True)
@@ -158,41 +167,37 @@ def main(args):
                 conf_all = []
                 in_camera1 = None
 
-                dtype = (
-                    torch.bfloat16
-                    if torch.cuda.get_device_capability()[0] >= 8
-                    else torch.float16
-                )
-                with torch.cuda.amp.autocast(dtype=dtype):
-                    if isinstance(batch, dict) and "img" in batch:
-                        batch["img"] = (batch["img"] + 1.0) / 2.0
-                    elif isinstance(batch, list) and all(
-                        isinstance(v, dict) and "img" in v for v in batch
-                    ):
-                        for view in batch:
-                            view["img"] = (view["img"] + 1.0) / 2.0
-                        # Gather all `img` tensors into a single tensor of shape [N, C, H, W]
-                        imgs_tensor = torch.cat([v["img"] for v in batch], dim=0)
+                if model_name.upper() == "VGGT":
+                    dtype_autocast = (
+                        torch.bfloat16
+                        if torch.cuda.get_device_capability()[0] >= 8
+                        else torch.float16
+                    )
+                    with torch.cuda.amp.autocast(dtype=dtype_autocast):
+                        if isinstance(batch, dict) and "img" in batch:
+                            batch["img"] = (batch["img"] + 1.0) / 2.0
+                        elif isinstance(batch, list) and all(
+                            isinstance(v, dict) and "img" in v for v in batch
+                        ):
+                            for view in batch:
+                                view["img"] = (view["img"] + 1.0) / 2.0
+                            imgs_tensor = torch.cat([v["img"] for v in batch], dim=0)
 
-                with torch.cuda.amp.autocast(dtype=dtype):
-                    with torch.no_grad():
-                        torch.cuda.synchronize()
-                        start = time.time()
-                        preds = model(imgs_tensor)
-                        torch.cuda.synchronize()
-                        end = time.time()
-                        elapsed_s = end - start
-                        frame_count = imgs_tensor.shape[0]
-                        fps = (
-                            frame_count / elapsed_s
-                            if elapsed_s > 0
-                            else float("inf")
-                        )
-                        print(f"Inference FPS (frames/s): {fps:.2f}")
+                    with torch.cuda.amp.autocast(dtype=dtype_autocast):
+                        with torch.no_grad():
+                            torch.cuda.synchronize()
+                            start = time.time()
+                            predictions = model(imgs_tensor)
+                            torch.cuda.synchronize()
+                            end = time.time()
+                            elapsed_s = end - start
+                            frame_count = imgs_tensor.shape[0]
+                            fps = (
+                                frame_count / elapsed_s if elapsed_s > 0 else float("inf")
+                            )
+                            print(f"Inference FPS (frames/s): {fps:.2f}")
 
-                    # Wrap model outputs per-view to align with batch later
-                    predictions = preds
-                    views = batch  # list[dict]
+                    views = batch
                     if "pose_enc" in predictions:
                         B, S = predictions["pose_enc"].shape[:2]
                     elif "world_points" in predictions:
@@ -234,8 +239,65 @@ def main(args):
                                 }
                             )
                         ress.append(res)
-
                     preds = ress
+                else:
+                    views = batch
+                    try:
+                        fast3r_views = []
+                        for v in views:
+                            img_batched = v["img"].unsqueeze(0)
+                            true_shape = torch.tensor(v["img"].shape[-2:])[None]
+                            fast3r_views.append(
+                                dict(
+                                    img=img_batched,
+                                    true_shape=true_shape,
+                                    idx=int(v.get("idx", 0)),
+                                    instance=str(v.get("instance", "")),
+                                )
+                            )
+
+                        torch.cuda.synchronize()
+                        start = time.time()
+                        output_dict, profiling_info = fast3r_inference(
+                            fast3r_views,
+                            model,
+                            torch.device(device.split(":")[0]),
+                            dtype=torch.float32,
+                            verbose=False,
+                            profiling=True,
+                        )
+                        torch.cuda.synchronize()
+                        end = time.time()
+                        total_time = (
+                            profiling_info.get("total_time", None)
+                            if isinstance(profiling_info, dict)
+                            else None
+                        )
+                        elapsed_s = total_time if (total_time and total_time > 0) else (end - start)
+                        frame_count = len(fast3r_views)
+                        fps = frame_count / elapsed_s if elapsed_s > 0 else float("inf")
+                        print(f"Inference FPS (frames/s): {fps:.2f}")
+
+                        preds_raw = output_dict["preds"]
+                        ress = []
+                        for s, pred in enumerate(preds_raw):
+                            pts = pred["pts3d_in_other_view"]
+                            conf = pred.get("conf", None)
+                            res = {
+                                "pts3d_in_other_view": pts,
+                                "conf": conf if conf is not None else torch.ones_like(pts[..., 0]),
+                            }
+                            if (
+                                isinstance(views, list)
+                                and s < len(views)
+                                and "valid_mask" in views[s]
+                            ):
+                                res["valid_mask"] = views[s]["valid_mask"]
+                            ress.append(res)
+                        preds = ress
+                    except Exception as e:
+                        print(f"Fast3R inference failed: {e}")
+                        continue
 
                     valid_length = len(preds) // args.revisit
                     if args.revisit > 1:
