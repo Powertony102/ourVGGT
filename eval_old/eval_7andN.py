@@ -117,9 +117,9 @@ def main(args):
         from fast3r.models.fast3r import Fast3R
         from fast3r.models.multiview_dust3r_module import MultiViewDUSt3RLitModule
 
-        device_obj = torch.device(device.split(":")[0])
+        device_obj = torch.device(device)
         model = Fast3R.from_pretrained("jedyang97/Fast3R_ViT_Large_512")
-        model = model.to(device_obj).eval()
+        model = model.to(device_obj).to(torch.bfloat16).eval()
         lit_module = MultiViewDUSt3RLitModule.load_for_inference(model)
         lit_module.eval()
     else:
@@ -276,8 +276,8 @@ def main(args):
                         output_dict, profiling_info = fast3r_inference(
                             fast3r_views,
                             model,
-                            torch.device(device.split(":")[0]),
-                            dtype=torch.float32,
+                            device_obj,
+                            dtype=torch.bfloat16,
                             verbose=False,
                             profiling=True,
                         )

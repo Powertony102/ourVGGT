@@ -279,7 +279,8 @@ class Regr3D_t(Criterion, MultiLoss):
         self.fix_first = fix_first
 
     def get_all_pts3d_t(self, gts, preds, dist_clip=None):
-        # everything is normalized w.r.t. camera of view1
+        target_device = gts[0]["pts3d"].device if torch.is_tensor(gts[0]["pts3d"]) else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        target_dtype = torch.bfloat16
         in_camera1 = inv(gts[0]["camera_pose"])
 
         gt_pts = []
@@ -287,17 +288,30 @@ class Regr3D_t(Criterion, MultiLoss):
         pr_pts = []
 
         for i, gt in enumerate(gts):
-            # in_camera1: Bs, 4, 4 gt['pts3d']: Bs, H, W, 3
-            gt_pts.append(geotrf(in_camera1, gt["pts3d"]))
+            gt_pt = geotrf(in_camera1, gt["pts3d"]) if torch.is_tensor(gt["pts3d"]) else torch.as_tensor(gt["pts3d"])  
+            gt_pt = gt_pt.to(target_device)
+            gt_pt = gt_pt.to(target_dtype)
+            gt_pts.append(gt_pt)
+
             valid = gt["valid_mask"].clone()
+            if isinstance(valid, torch.Tensor) and valid.device != target_device:
+                valid = valid.to(target_device)
 
             if dist_clip is not None:
-                # points that are too far-away == invalid
-                dis = gt["pts3d"].norm(dim=-1)
+                dis = gt["pts3d"].norm(dim=-1) if isinstance(gt["pts3d"], torch.Tensor) else torch.as_tensor(gt["pts3d"]).norm(dim=-1)
+                dis = dis.to(target_device)
                 valid = valid & (dis <= dist_clip)
 
             valids.append(valid)
-            pr_pts.append(get_pred_pts3d(gt, preds[i], use_pose=True))
+
+            pr = get_pred_pts3d(gt, preds[i], use_pose=True)
+            if isinstance(pr, torch.Tensor):
+                if pr.device != target_device:
+                    pr = pr.to(target_device, non_blocking=True)
+                pr = pr.to(target_dtype)
+            else:
+                pr = torch.as_tensor(pr, device=target_device, dtype=target_dtype)
+            pr_pts.append(pr)
             # if i != len(gts)-1:
             #     pr_pts_l.append(get_pred_pts3d(gt, preds[i][0], use_pose=(i!=0)))
 
@@ -488,7 +502,6 @@ class Regr3D_t_ScaleInv(Regr3D_t):
     """
 
     def get_all_pts3d_t(self, gts, preds):
-        # compute depth-normalized points
         gt_pts, pred_pts, gt_factor, pr_factor, masks, monitoring = (
             super().get_all_pts3d_t(gts, preds)
         )
@@ -505,20 +518,29 @@ class Regr3D_t_ScaleInv(Regr3D_t):
         _, gt_scale = get_joint_pointcloud_center_scale(gt_pts, masks)
         _, pred_scale = get_joint_pointcloud_center_scale(pred_pts_all, masks)
 
+        target_device = gt_pts[0].device if isinstance(gt_pts[0], torch.Tensor) else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+        target_dtype = torch.bfloat16
+        if isinstance(gt_scale, torch.Tensor) and gt_scale.device != target_device:
+            gt_scale = gt_scale.to(target_device)
+        if isinstance(pred_scale, torch.Tensor) and pred_scale.device != target_device:
+            pred_scale = pred_scale.to(target_device)
+        if isinstance(gt_scale, torch.Tensor):
+            gt_scale = gt_scale.to(target_dtype)
+        if isinstance(pred_scale, torch.Tensor):
+            pred_scale = pred_scale.to(target_dtype)
+        pred_pts = [pt.to(target_device).to(target_dtype) if isinstance(pt, torch.Tensor) else torch.as_tensor(pt, device=target_device, dtype=target_dtype) for pt in pred_pts]
+        gt_pts = [pt.to(target_device).to(target_dtype) if isinstance(pt, torch.Tensor) else torch.as_tensor(pt, device=target_device, dtype=target_dtype) for pt in gt_pts]
+
         # prevent predictions to be in a ridiculous range
         pred_scale = pred_scale.clip(min=1e-3, max=1e3)
 
         # subtract the median depth
         if self.gt_scale:
             for i in range(len(pred_pts)):
-                # for j in range(len(pred_pts[i])):
                 pred_pts[i] *= gt_scale / pred_scale
-
         else:
             for i in range(len(pred_pts)):
-                # for j in range(len(pred_pts[i])):
                 pred_pts[i] *= pred_scale / gt_scale
-
             for i in range(len(gt_pts)):
                 gt_pts[i] *= gt_scale / pred_scale
 
