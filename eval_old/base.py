@@ -8,9 +8,9 @@ import PIL
 import numpy as np
 import torch
 
-from dataset_utils.transforms import ImgNorm
-import dataset_utils.cropping as cropping
-from utils import depthmap_to_absolute_camera_coordinates
+from .dataset_utils.transforms import ImgNorm
+from .dataset_utils import cropping
+from .utils import depthmap_to_absolute_camera_coordinates
 
 
 class BaseStereoViewDataset:

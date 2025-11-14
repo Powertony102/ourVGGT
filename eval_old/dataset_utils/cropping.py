@@ -6,7 +6,7 @@
 import PIL.Image
 import os
 
-from utils import colmap_to_opencv_intrinsics, opencv_to_colmap_intrinsics
+from ..utils import colmap_to_opencv_intrinsics, opencv_to_colmap_intrinsics
 
 os.environ["OPENCV_IO_ENABLE_OPENEXR"] = "1"
 import cv2  # noqa

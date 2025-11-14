@@ -3,8 +3,8 @@ import cv2
 import numpy as np
 import os.path as osp
 from collections import deque
-from base import BaseStereoViewDataset
-import dataset_utils.cropping as cropping
+from .base import BaseStereoViewDataset
+from .dataset_utils import cropping
 from vggt.utils.eval_utils import imread_cv2, shuffle_deque
 
 
