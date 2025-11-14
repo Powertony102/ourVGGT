@@ -255,13 +255,18 @@ def main(args):
                     try:
                         fast3r_views = []
                         for v in views:
-                            img_batched = v["img"].unsqueeze(0)
-                            true_shape = torch.tensor(v["img"].shape[-2:])[None]
+                            img_batched = v["img"]
+                            true_shape_batched = v.get("true_shape")
+                            idx_val = v.get("idx", 0)
+                            if torch.is_tensor(idx_val):
+                                idx_val = int(idx_val.item())
+                            else:
+                                idx_val = int(idx_val)
                             fast3r_views.append(
                                 dict(
                                     img=img_batched,
-                                    true_shape=true_shape,
-                                    idx=int(v.get("idx", 0)),
+                                    true_shape=true_shape_batched,
+                                    idx=idx_val,
                                     instance=str(v.get("instance", "")),
                                 )
                             )
