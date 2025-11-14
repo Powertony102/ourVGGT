@@ -50,6 +50,7 @@ def get_args_parser():
         "--merging", type=int, default=0, help="VGGT aggregator merging steps"
     )
     parser.add_argument("--kf", type=int, default=2, help="key frame")
+    parser.add_argument("--nrgbd_root", type=str, default="/home/jovyan/shared/xinzeli/fastplus/nrgbd/")
     return parser
 
 
@@ -67,6 +68,9 @@ def main(args):
         resolution = (518, 392)
     else:
         raise NotImplementedError
+    if not osp.isdir(args.nrgbd_root):
+        raise PermissionError(f"NRGBD root not accessible: {args.nrgbd_root}")
+
     datasets_all = {
         # "7scenes": SevenScenes(
         #     split="test",
@@ -78,7 +82,7 @@ def main(args):
         # ),  # 20),
         "NRGBD": NRGBD(
             split="test",
-            ROOT="/home/jovyan/shared/xinzeli/fastplus/nrgbd/",
+            ROOT=args.nrgbd_root,
             resolution=resolution,
             num_seq=1,
             full_video=True,
