@@ -1,7 +1,0 @@
-# @package _global_
-
-defaults:
-  - ablation_varying_test_views/default
-
-data:
-  num_views_val: 3
