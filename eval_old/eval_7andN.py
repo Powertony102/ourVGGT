@@ -339,12 +339,12 @@ def main(args):
                         image = view["img"].permute(0, 2, 3, 1).cpu().numpy()[0]
                         mask = view["valid_mask"].cpu().numpy()[0]
 
-                        pts = pred_pts[j].cpu().numpy()[0]
-                        conf = preds[j]["conf"].cpu().data.numpy()[0]
+                        pts = pred_pts[j].to(torch.float32).cpu().numpy()[0]
+                        conf = preds[j]["conf"].to(torch.float32).cpu().data.numpy()[0]
 
                         # mask = mask & (conf > 1.8)
 
-                        pts_gt = gt_pts[j].detach().cpu().numpy()[0]
+                        pts_gt = gt_pts[j].detach().to(torch.float32).cpu().numpy()[0]
 
                         H, W = image.shape[:2]
                         cx = W // 2

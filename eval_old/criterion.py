@@ -280,7 +280,6 @@ class Regr3D_t(Criterion, MultiLoss):
 
     def get_all_pts3d_t(self, gts, preds, dist_clip=None):
         target_device = gts[0]["pts3d"].device if torch.is_tensor(gts[0]["pts3d"]) else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        target_dtype = torch.bfloat16
         in_camera1 = inv(gts[0]["camera_pose"])
 
         gt_pts = []
@@ -290,7 +289,6 @@ class Regr3D_t(Criterion, MultiLoss):
         for i, gt in enumerate(gts):
             gt_pt = geotrf(in_camera1, gt["pts3d"]) if torch.is_tensor(gt["pts3d"]) else torch.as_tensor(gt["pts3d"])  
             gt_pt = gt_pt.to(target_device)
-            gt_pt = gt_pt.to(target_dtype)
             gt_pts.append(gt_pt)
 
             valid = gt["valid_mask"].clone()
@@ -308,9 +306,8 @@ class Regr3D_t(Criterion, MultiLoss):
             if isinstance(pr, torch.Tensor):
                 if pr.device != target_device:
                     pr = pr.to(target_device, non_blocking=True)
-                pr = pr.to(target_dtype)
             else:
-                pr = torch.as_tensor(pr, device=target_device, dtype=target_dtype)
+                pr = torch.as_tensor(pr, device=target_device)
             pr_pts.append(pr)
             # if i != len(gts)-1:
             #     pr_pts_l.append(get_pred_pts3d(gt, preds[i][0], use_pose=(i!=0)))
@@ -519,17 +516,12 @@ class Regr3D_t_ScaleInv(Regr3D_t):
         _, pred_scale = get_joint_pointcloud_center_scale(pred_pts_all, masks)
 
         target_device = gt_pts[0].device if isinstance(gt_pts[0], torch.Tensor) else torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-        target_dtype = torch.bfloat16
         if isinstance(gt_scale, torch.Tensor) and gt_scale.device != target_device:
             gt_scale = gt_scale.to(target_device)
         if isinstance(pred_scale, torch.Tensor) and pred_scale.device != target_device:
             pred_scale = pred_scale.to(target_device)
-        if isinstance(gt_scale, torch.Tensor):
-            gt_scale = gt_scale.to(target_dtype)
-        if isinstance(pred_scale, torch.Tensor):
-            pred_scale = pred_scale.to(target_dtype)
-        pred_pts = [pt.to(target_device).to(target_dtype) if isinstance(pt, torch.Tensor) else torch.as_tensor(pt, device=target_device, dtype=target_dtype) for pt in pred_pts]
-        gt_pts = [pt.to(target_device).to(target_dtype) if isinstance(pt, torch.Tensor) else torch.as_tensor(pt, device=target_device, dtype=target_dtype) for pt in gt_pts]
+        pred_pts = [pt.to(target_device) if isinstance(pt, torch.Tensor) else torch.as_tensor(pt, device=target_device) for pt in pred_pts]
+        gt_pts = [pt.to(target_device) if isinstance(pt, torch.Tensor) else torch.as_tensor(pt, device=target_device) for pt in gt_pts]
 
         # prevent predictions to be in a ridiculous range
         pred_scale = pred_scale.clip(min=1e-3, max=1e3)
