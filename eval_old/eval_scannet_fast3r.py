@@ -128,6 +128,13 @@ if __name__ == "__main__":
 
         try:
             fast3r_views = fast3r_load_images([str(p) for p in image_paths], size=512, verbose=False)
+            for i, v in enumerate(fast3r_views):
+                v.setdefault("dataset", "scannet")
+                v.setdefault("label", image_paths[i].stem)
+                v.setdefault("instance", str(i))
+            for v in fast3r_views:
+                if not ("dataset" in v and "label" in v and "instance" in v):
+                    raise ValueError("view missing required keys: dataset/label/instance")
             output_dict, profiling_info = fast3r_inference(
                 fast3r_views,
                 model,
