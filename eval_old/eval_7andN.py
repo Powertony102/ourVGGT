@@ -57,6 +57,7 @@ def get_args_parser():
     )
     parser.add_argument("--kf", type=int, default=2, help="key frame")
     parser.add_argument("--nrgbd_root", type=str, default="/home/jovyan/shared/xinzeli/fastplus/nrgbd/")
+    # parser.add_argument("--7scenes_root", type=str, default="/home/jovyan/shared/xinzeli/fastplus/7-scenes")
     return parser
 
 
@@ -78,14 +79,14 @@ def main(args):
         raise PermissionError(f"NRGBD root not accessible: {args.nrgbd_root}")
 
     datasets_all = {
-        # "7scenes": SevenScenes(
-        #     split="test",
-        #     ROOT="/root/autodl-tmp/data/7-scenes",
-        #     resolution=resolution,
-        #     num_seq=1,
-        #     full_video=True,
-        #     kf_every=args.kf,
-        # ),  # 20),
+        "7scenes": SevenScenes(
+            split="test",
+            ROOT="/home/jovyan/shared/xinzeli/fastplus/7-scenes",
+            resolution=resolution,
+            num_seq=1,
+            full_video=True,
+            kf_every=args.kf,
+        ),  # 20),
         "NRGBD": NRGBD(
             split="test",
             ROOT=args.nrgbd_root,
