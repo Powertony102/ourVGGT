@@ -321,7 +321,7 @@ class Fast3R(nn.Module,
             encode_time = encode_images_end_time - encode_images_start_time
             profiling_info["encode_images_time"] = encode_time
             print(f"encode_images time: {encode_time}")
-        if encode_images_end_time - encode_images_start_time > 20:
+        if encode_images_end_time - encode_images_start_time > 40:
             print(f"something is wrong with the encoder, it took: {encode_images_end_time - encode_images_start_time}")
             # print the image and true_shape
             for view_idx, view in enumerate(views):
