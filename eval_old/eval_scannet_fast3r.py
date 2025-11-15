@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 import numpy as np
 import torch
+import time
 import os
 import sys
 
@@ -81,6 +82,8 @@ if __name__ == "__main__":
     print(f"Evaluate {len(scannet_scenes)} scenes")
 
     all_scenes_metrics = {"scenes": {}, "average": {}}
+    from collections import defaultdict
+    scene_infer_times = defaultdict(list)
     dtype = torch.bfloat16
     device = torch.device(args.device)
     model = Fast3R.from_pretrained(args.fast3r_ckpt)
@@ -157,6 +160,10 @@ if __name__ == "__main__":
             if total_time is None:
                 total_time = 0.0
             inference_time_ms = float(total_time * 1000.0)
+            frame_count = len(fast3r_views)
+            fps = frame_count / total_time if total_time > 0 else float("inf")
+            print(f"Inference FPS (frames/s): {fps:.2f} [{time.strftime('%Y-%m-%d %H:%M:%S')}]")
+            scene_infer_times[scene].append(float(fps))
 
             merged_points = np.vstack(all_world_points)
             if merged_points.shape[0] > 999999:
@@ -198,6 +205,7 @@ if __name__ == "__main__":
                         "inference_time_ms",
                     ]
                 }
+                all_scenes_metrics["scenes"][scene]["fps"] = float(fps)
                 print("Complete metrics", all_scenes_metrics["scenes"][scene])
 
         except Exception as e:
@@ -206,6 +214,10 @@ if __name__ == "__main__":
 
             traceback.print_exc()
 
+    for sid, times in scene_infer_times.items():
+        if len(times) > 0:
+            avg_fps = np.mean(times)
+            print(f"Idx: {sid}, FPS_avg: {avg_fps:.2f}")
     # Summarize average metrics and save
     compute_average_metrics_and_save(
         all_scenes_metrics,
