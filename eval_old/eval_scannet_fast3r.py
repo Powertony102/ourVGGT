@@ -116,6 +116,7 @@ if __name__ == "__main__":
 
         c2ws = poses_gt[selected_pose_indices]
         image_paths = selected_image_paths
+        frame_ids = selected_frame_ids
 
         if len(image_paths) == 0:
             print(f"No images found in {images_dir}")
