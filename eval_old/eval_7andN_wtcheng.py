@@ -6,6 +6,16 @@ ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
+EVAL_OLD_DIR = os.path.abspath(os.path.dirname(__file__))
+if EVAL_OLD_DIR not in sys.path:
+    sys.path.insert(0, EVAL_OLD_DIR)
+
+FAST3R_PROJECT_DIR = os.path.abspath(os.path.join(ROOT_DIR, "fast3r"))
+FAST3R_PKG_DIR = os.path.abspath(os.path.join(ROOT_DIR, "fast3r", "fast3r"))
+for p in (FAST3R_PROJECT_DIR, FAST3R_PKG_DIR):
+    if p not in sys.path:
+        sys.path.append(p)
+
 import time
 import torch
 import argparse
@@ -50,8 +60,8 @@ def get_args_parser():
 
 
 def main(args):
-    from data import SevenScenes, NRGBD
-    from utils import accuracy, completion
+    from eval_old.data import SevenScenes, NRGBD
+    from eval_old.utils import accuracy, completion
     # Ensure deterministic numpy sampling (e.g., point subsampling)
     np.random.seed(0)
 
