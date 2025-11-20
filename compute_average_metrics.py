@@ -220,6 +220,14 @@ def main():
     out_dir = Path(args.path)
     setup_logging(out_dir)
     root = find_eval_root()
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    try:
+        from vggt.utils.eval_utils import get_sorted_image_paths, load_poses, build_frame_selection
+    except Exception:
+        get_sorted_image_paths = None
+        load_poses = None
+        build_frame_selection = None
     files = list(iter_metric_files_from_structure(root))
     if not files:
         files = list(iter_metric_files_from_fs(root))
@@ -242,10 +250,20 @@ def main():
                 if fc is None:
                     fc = _to_float(norm.get("frames"))
                 if fc is None and args.data_dir:
-                    # Try to infer scene id from source path and count frames under data_dir
                     try:
                         scene_id = Path(norm["source"]).parent.name
-                        fc = float(_count_scene_frames(Path(args.data_dir), scene_id))
+                        if get_sorted_image_paths and load_poses and build_frame_selection:
+                            images_dir = Path(args.data_dir) / scene_id / "color"
+                            pose_dir = Path(args.data_dir) / scene_id / "pose"
+                            image_paths = get_sorted_image_paths(images_dir)
+                            poses_gt, first_gt_pose, available_pose_frame_ids = load_poses(pose_dir)
+                            if available_pose_frame_ids is not None:
+                                selected_frame_ids, selected_image_paths, _ = build_frame_selection(image_paths, available_pose_frame_ids, args.input_frame)
+                                fc = float(len(selected_image_paths))
+                            else:
+                                fc = None
+                        else:
+                            fc = None
                     except Exception:
                         fc = None
                 if it_ms is not None and fc is not None and it_ms > 0 and fc > 0:
