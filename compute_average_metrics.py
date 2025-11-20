@@ -9,6 +9,7 @@ from pathlib import Path
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--path", required=True)
+    p.add_argument("--data_dir", required=False, help="Optional dataset root to derive per-scene frame counts")
     return p.parse_args()
 
 def setup_logging(out_dir: Path):
@@ -203,6 +204,17 @@ def write_backup_csv(out_dir: Path, metric_keys, rows):
             w.writerow(line)
     return backup
 
+def _count_scene_frames(data_dir: Path, scene_id: str) -> int:
+    try:
+        color_dir = data_dir / scene_id / "color"
+        if not color_dir.exists():
+            return 0
+        exts = (".jpg", ".jpeg", ".png")
+        return sum(1 for p in color_dir.iterdir() if p.is_file() and p.suffix.lower() in exts)
+    except Exception:
+        return 0
+
+
 def main():
     args = parse_args()
     out_dir = Path(args.path)
@@ -224,15 +236,21 @@ def main():
             parsed = []
         for row in parsed:
             norm = normalize_row(row, p)
-            # Fallback: compute fps if missing and inputs available
             if "fps" not in norm or not is_numeric(norm.get("fps")):
                 it_ms = _to_float(norm.get("inference_time_ms"))
-                # support both 'frame_count' and 'frames' keys
                 fc = _to_float(norm.get("frame_count"))
                 if fc is None:
                     fc = _to_float(norm.get("frames"))
-                if it_ms is not None and fc is not None and it_ms > 0:
+                if fc is None and args.data_dir:
+                    # Try to infer scene id from source path and count frames under data_dir
+                    try:
+                        scene_id = Path(norm["source"]).parent.name
+                        fc = float(_count_scene_frames(Path(args.data_dir), scene_id))
+                    except Exception:
+                        fc = None
+                if it_ms is not None and fc is not None and it_ms > 0 and fc > 0:
                     norm["fps"] = fc / (it_ms / 1000.0)
+                    norm["frame_count"] = int(fc)
             rows.append(norm)
     if not rows:
         logging.error("没有可解析的评估数据")

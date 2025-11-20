@@ -1,6 +1,8 @@
 .
-├── all_scenes_metrics.json
-├── average_metrics.json
+├── average_metrics_report.log
+├── average_metrics_report.txt
+├── compute_average_metrics.py
+├── raw_metrics_backup.csv
 ├── scene0000_00
 │   ├── metrics.json
 │   └── plot.png
@@ -150,4 +152,4 @@
 │   └── plot.png
 └── structure.txt
 
-49 directories, 101 files
+49 directories, 103 files

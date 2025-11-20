@@ -1,0 +1,15 @@
+{
+    "ate": 0.10170993378027195,
+    "are": 3.92674394274523,
+    "rpe_rot": 1.205286449999759,
+    "rpe_trans": 0.0412220352723657,
+    "chamfer_distance": 0.3650146812739868,
+    "scale_factor": 1.7247886019824676,
+    "aligned_ate": 0.10170993378027195,
+    "aligned_are": 3.92674394274523,
+    "aligned_rpe_rot": 1.205286449999759,
+    "aligned_rpe_trans": 0.0412220352723657,
+    "aligned_chamfer_distance": 0.3650146812739868,
+    "aligned_scale_factor": 1.7247886019824676,
+    "inference_time_ms": 183228.85131835938
+}
