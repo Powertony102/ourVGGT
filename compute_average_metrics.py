@@ -169,7 +169,10 @@ def write_report(out_dir: Path, metric_keys, overall, groups):
         for k in metric_keys:
             c = overall[k]["count"]
             m = overall[k]["sum"] / c if c > 0 else math.nan
-            f.write(f"{k}\t{m:.4f}\t{c}\n")
+            if k.lower() == "fps":
+                f.write(f"{k}\t{m:.3f}\t{c}\n")
+            else:
+                f.write(f"{k}\t{m:.4f}\t{c}\n")
         for gkey, agg in groups.items():
             if gkey == (("all", "all"),):
                 continue
@@ -177,7 +180,10 @@ def write_report(out_dir: Path, metric_keys, overall, groups):
             for k in metric_keys:
                 c = agg[k]["count"]
                 m = agg[k]["sum"] / c if c > 0 else math.nan
-                f.write(f"{k}\t{m:.4f}\t{c}\n")
+                if k.lower() == "fps":
+                    f.write(f"{k}\t{m:.3f}\t{c}\n")
+                else:
+                    f.write(f"{k}\t{m:.4f}\t{c}\n")
     return report
 
 def write_backup_csv(out_dir: Path, metric_keys, rows):
