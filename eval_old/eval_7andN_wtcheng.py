@@ -72,14 +72,14 @@ def main(args):
             full_video=True,
             kf_every=args.kf,
         ),  # 20),
-        # "NRGBD": NRGBD(
-        #     split="test",
-        #     ROOT="/home/jovyan/shared/xinzeli/fastplus/nrgbd",
-        #     resolution=resolution,
-        #     num_seq=1,
-        #     full_video=True,
-        #     kf_every=args.kf,
-        # ),
+        "NRGBD": NRGBD(
+            split="test",
+            ROOT="/home/jovyan/shared/xinzeli/fastplus/nrgbd",
+            resolution=resolution,
+            num_seq=1,
+            full_video=True,
+            kf_every=args.kf,
+        ),
     }
 
     device = args.device
