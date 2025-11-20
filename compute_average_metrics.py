@@ -5,11 +5,13 @@ import logging
 import math
 import os
 from pathlib import Path
+import sys
 
 def parse_args():
     p = argparse.ArgumentParser()
     p.add_argument("--path", required=True)
     p.add_argument("--data_dir", required=False, help="Optional dataset root to derive per-scene frame counts")
+    p.add_argument("--input_frame", type=int, default=200, help="Use the same frame selection policy as eval_scannet.py")
     return p.parse_args()
 
 def setup_logging(out_dir: Path):
@@ -220,6 +222,14 @@ def main():
     out_dir = Path(args.path)
     setup_logging(out_dir)
     root = find_eval_root()
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    try:
+        from vggt.utils.eval_utils import get_sorted_image_paths, load_poses, build_frame_selection
+    except Exception:
+        get_sorted_image_paths = None
+        load_poses = None
+        build_frame_selection = None
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
     try:
