@@ -720,6 +720,9 @@ def evaluate_scene_and_save(
     for metric_name, metric_value in list(stats_aligned.items()):
         all_metrics[f"aligned_{metric_name}"] = metric_value
     all_metrics["inference_time_ms"] = float(inference_time_ms)
+    total_time_s = float(inference_time_ms) / 1000.0
+    fps = (n / total_time_s) if total_time_s > 0 else 0.0
+    all_metrics["fps"] = float(fps)
 
     with open(output_scene_dir / "metrics.json", "w") as f:
         import json
@@ -746,6 +749,7 @@ def compute_average_metrics_and_save(
         "rpe_rot",
         "rpe_trans",
         "inference_time_ms",
+        "fps",
     ]
     average_metrics_list: Dict[str, List[float]] = {
         metric: [] for metric in metric_names

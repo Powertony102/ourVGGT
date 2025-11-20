@@ -119,6 +119,12 @@ def normalize_row(row, source):
         out[k] = v
     return out
 
+def _to_float(v):
+    try:
+        return float(v)
+    except Exception:
+        return None
+
 def detect_groups(row):
     g = {}
     for key in ["model", "dataset"]:
@@ -218,6 +224,15 @@ def main():
             parsed = []
         for row in parsed:
             norm = normalize_row(row, p)
+            # Fallback: compute fps if missing and inputs available
+            if "fps" not in norm or not is_numeric(norm.get("fps")):
+                it_ms = _to_float(norm.get("inference_time_ms"))
+                # support both 'frame_count' and 'frames' keys
+                fc = _to_float(norm.get("frame_count"))
+                if fc is None:
+                    fc = _to_float(norm.get("frames"))
+                if it_ms is not None and fc is not None and it_ms > 0:
+                    norm["fps"] = fc / (it_ms / 1000.0)
             rows.append(norm)
     if not rows:
         logging.error("没有可解析的评估数据")
