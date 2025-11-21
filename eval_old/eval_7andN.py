@@ -565,9 +565,11 @@ def main(args):
                         if in_camera1 is None:
                             in_camera1 = view["camera_pose"][0].cpu()
 
-                        image = view["img"].permute(0, 2, 3, 1).cpu().numpy()[0]
+                        image = (
+                            view["img"].permute(0, 2, 3, 1).to(torch.float32).cpu().numpy()[0]
+                        )
                         image = (image + 1.0) / 2.0
-                        mask = view["valid_mask"].cpu().numpy()[0]
+                        mask = view["valid_mask"].to(torch.float32).cpu().numpy()[0]
 
                         pts = pred_pts[j].to(torch.float32).cpu().numpy()[0]
                         conf = preds[j]["conf"].to(torch.float32).cpu().data.numpy()[0]
