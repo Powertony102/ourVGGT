@@ -39,7 +39,8 @@ class PoseDecoder(nn.Module):
         preliminary_cameras: cameras in opencv coordinate.
         """
 
-        pred_cameras = self.mlp(pose_feat)  # Bx7, 3 for absT, 4 for quaR
+        pose_feat = pose_feat.to(self.mlp.fc1.weight.dtype)
+        pred_cameras = self.mlp(pose_feat)
         return pred_cameras
 
 
@@ -78,7 +79,7 @@ class PoseEncoder(nn.Module):
         ).to(camera.dtype)
         pose_enc = postprocess_pose(pose_enc, self.pose_mode, inverse=True)
         pose_feat = self.embed_pose(pose_enc)
-        pose_feat = self.pose_encoder(pose_feat)
+        pose_feat = self.pose_encoder(pose_feat.to(self.pose_encoder.fc1.weight.dtype))
         return pose_feat
 
 

@@ -90,6 +90,7 @@ class Mlp(nn.Module):
         self.drop2 = nn.Dropout(drop_probs[1])
 
     def forward(self, x):
+        x = x.to(self.fc1.weight.dtype)
         return self.drop2(self.fc2(self.drop1(self.act(self.fc1(x)))))
 
 
