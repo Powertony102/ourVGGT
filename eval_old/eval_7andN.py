@@ -641,6 +641,16 @@ def main(args):
                     pts_all_aligned = (s * (R @ pts_all_masked.T)).T + t  # (N,3)
                     pts_all_masked = pts_all_aligned
 
+                # Guard against empty point clouds to avoid KDTree/normal estimation errors
+                if pts_all_masked.shape[0] == 0 or pts_gt_all_masked.shape[0] == 0:
+                    try:
+                        sid = scene_id
+                    except Exception:
+                        sid = str(data_idx)
+                    print(f"Empty point cloud for {sid}; skipping metrics for this scene")
+                    print(f"Empty point cloud for {sid}; skipping metrics for this scene", file=open(log_file, "a"))
+                    continue
+
                 pcd = o3d.geometry.PointCloud()
                 pcd.points = o3d.utility.Vector3dVector(pts_all_masked)
                 pcd.colors = o3d.utility.Vector3dVector(images_all_masked)
