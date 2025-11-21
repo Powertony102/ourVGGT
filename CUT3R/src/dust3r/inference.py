@@ -70,6 +70,18 @@ def loss_of_one_batch(
     if symmetrize_batch:
         batch = make_batch_symmetric(batch)
 
+    target_dtype = next(model.parameters()).dtype if hasattr(model, 'parameters') else None
+    if target_dtype is not None:
+        for view in batch:
+            for k, v in view.items():
+                if isinstance(v, torch.Tensor) and torch.is_floating_point(v) and v.dtype != target_dtype:
+                    view[k] = v.to(target_dtype)
+                elif isinstance(v, (list, tuple)):
+                    view[k] = [x.to(target_dtype) if isinstance(x, torch.Tensor) and torch.is_floating_point(x) and x.dtype != target_dtype else x for x in v]
+        for view in batch:
+            for k, v in view.items():
+                if isinstance(v, torch.Tensor) and torch.is_floating_point(v):
+                    assert v.dtype == target_dtype
     with torch.cuda.amp.autocast(enabled=not inference):
         if inference:
             output, state_args = model(batch, ret_state=True)
@@ -111,6 +123,18 @@ def loss_of_one_batch_tbptt(
     all_preds = []
     all_loss = 0.0
     all_loss_details = {}
+    target_dtype = next(model.parameters()).dtype if hasattr(model, 'parameters') else None
+    if target_dtype is not None:
+        for view in batch:
+            for k, v in view.items():
+                if isinstance(v, torch.Tensor) and torch.is_floating_point(v) and v.dtype != target_dtype:
+                    view[k] = v.to(target_dtype)
+                elif isinstance(v, (list, tuple)):
+                    view[k] = [x.to(target_dtype) if isinstance(x, torch.Tensor) and torch.is_floating_point(x) and x.dtype != target_dtype else x for x in v]
+        for view in batch:
+            for k, v in view.items():
+                if isinstance(v, torch.Tensor) and torch.is_floating_point(v):
+                    assert v.dtype == target_dtype
     with torch.cuda.amp.autocast(enabled=not inference):
         with torch.no_grad():
             (feat, pos, shape), (

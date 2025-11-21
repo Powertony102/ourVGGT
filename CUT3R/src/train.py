@@ -144,6 +144,10 @@ def train(args):
     np.random.seed(seed)
     random.seed(seed)
     cudnn.benchmark = args.benchmark
+    try:
+        torch.set_default_dtype(torch.bfloat16)
+    except Exception:
+        torch.set_default_dtype(torch.float32)
 
     # training dataset and loader
     printer.info("Building train dataset %s", args.train_dataset)
@@ -188,6 +192,10 @@ def train(args):
     test_criterion = eval(args.test_criterion or args.criterion).to(device)
 
     model.to(device)
+    try:
+        model.to(dtype=torch.bfloat16)
+    except Exception:
+        model.to(dtype=torch.float32)
 
     if args.gradient_checkpointing:
         model.gradient_checkpointing_enable()
