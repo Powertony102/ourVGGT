@@ -280,8 +280,8 @@ def main(args):
                     try:
                         # CUT3R branch
                         if model_name.upper() == "CUT3R":
-                            # Build image paths from dataset views
                             img_paths = []
+                            all_resolved = True
                             for v in views:
                                 impath = v.get("instance", None)
                                 if isinstance(impath, str) and osp.isfile(impath):
@@ -304,38 +304,67 @@ def main(args):
                                     except Exception:
                                         resolved = None
                                 if resolved is None:
-                                    raise ValueError("CUT3R requires 'instance' as image path for each view")
+                                    all_resolved = False
+                                    break
                                 img_paths.append(resolved)
 
-                            # Prepare CUT3R views (strictly following demo.py)
-                            images = cut3r_ctx["load_images"](img_paths, size=args.size)
-                            cut3r_views = []
-                            for i in range(len(images)):
-                                img = images[i]["img"]
-                                true_shape = torch.from_numpy(images[i]["true_shape"]).to(img.device)
-                                cut3r_views.append(
-                                    {
-                                        "img": img,
-                                        "ray_map": torch.full(
-                                            (
-                                                img.shape[0],
-                                                6,
-                                                img.shape[-2],
-                                                img.shape[-1],
+                            if all_resolved:
+                                images = cut3r_ctx["load_images"](img_paths, size=args.size)
+                                cut3r_views = []
+                                for i in range(len(images)):
+                                    img = images[i]["img"]
+                                    true_shape = torch.from_numpy(images[i]["true_shape"]).to(img.device)
+                                    cut3r_views.append(
+                                        {
+                                            "img": img,
+                                            "ray_map": torch.full(
+                                                (
+                                                    img.shape[0],
+                                                    6,
+                                                    img.shape[-2],
+                                                    img.shape[-1],
+                                                ),
+                                                torch.nan,
+                                                device=img.device,
                                             ),
-                                            torch.nan,
-                                            device=img.device,
-                                        ),
-                                        "true_shape": true_shape,
-                                        "idx": i,
-                                        "instance": str(i),
-                                        "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device),
-                                        "img_mask": torch.tensor(True, device=img.device).unsqueeze(0),
-                                        "ray_mask": torch.tensor(False, device=img.device).unsqueeze(0),
-                                        "update": torch.tensor(True, device=img.device).unsqueeze(0),
-                                        "reset": torch.tensor(False, device=img.device).unsqueeze(0),
-                                    }
-                                )
+                                            "true_shape": true_shape,
+                                            "idx": i,
+                                            "instance": str(i),
+                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device),
+                                            "img_mask": torch.tensor(True, device=img.device).unsqueeze(0),
+                                            "ray_mask": torch.tensor(False, device=img.device).unsqueeze(0),
+                                            "update": torch.tensor(True, device=img.device).unsqueeze(0),
+                                            "reset": torch.tensor(False, device=img.device).unsqueeze(0),
+                                        }
+                                    )
+                            else:
+                                cut3r_views = []
+                                for i, v in enumerate(views):
+                                    img = v["img"]
+                                    true_shape = torch.tensor([img.shape[-2], img.shape[-1]], dtype=torch.int32, device=img.device)
+                                    cut3r_views.append(
+                                        {
+                                            "img": img,
+                                            "ray_map": torch.full(
+                                                (
+                                                    img.shape[0],
+                                                    6,
+                                                    img.shape[-2],
+                                                    img.shape[-1],
+                                                ),
+                                                torch.nan,
+                                                device=img.device,
+                                            ),
+                                            "true_shape": true_shape,
+                                            "idx": i,
+                                            "instance": str(i),
+                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device),
+                                            "img_mask": torch.tensor(True, device=img.device).unsqueeze(0),
+                                            "ray_mask": torch.tensor(False, device=img.device).unsqueeze(0),
+                                            "update": torch.tensor(True, device=img.device).unsqueeze(0),
+                                            "reset": torch.tensor(False, device=img.device).unsqueeze(0),
+                                        }
+                                    )
 
                             torch.cuda.synchronize()
                             start = time.time()
