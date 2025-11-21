@@ -66,7 +66,7 @@ def get_args_parser():
     parser.add_argument("--kf", type=int, default=2, help="key frame")
     parser.add_argument("--nrgbd_root", type=str, default="/home/jovyan/shared/xinzeli/fastplus/nrgbd/")
     parser.add_argument("--cut3r_model_path", type=str, default=os.path.join("CUT3R", "src", "cut3r_512_dpt_4_64.pth"))
-    # parser.add_argument("--7scenes_root", type=str, default="/home/jovyan/shared/xinzeli/fastplus/7-scenes")
+    parser.add_argument("--seven_scenes_root", type=str, default="/home/jovyan/shared/xinzeli/fastplus/7-scenes")
     return parser
 
 
@@ -90,7 +90,7 @@ def main(args):
     datasets_all = {
         "7scenes": SevenScenes(
             split="test",
-            ROOT="/home/jovyan/shared/xinzeli/fastplus/7-scenes",
+            ROOT=args.seven_scenes_root,
             resolution=resolution,
             num_seq=1,
             full_video=True,
@@ -284,21 +284,28 @@ def main(args):
                             img_paths = []
                             for v in views:
                                 impath = v.get("instance", None)
-                                if not (isinstance(impath, str) and osp.isfile(impath)):
-                                    ds_name = v.get("dataset", None)
-                                    label = v.get("label", None)
-                                    if isinstance(ds_name, str) and isinstance(label, str):
-                                        try:
-                                            scene_id, im_idx = label.rsplit("/", 1)
-                                            if ds_name.lower() in ("7scenes", "7scenes", "7scenes"):
-                                                impath = osp.join(dataset.ROOT, scene_id, f"frame-{im_idx}.color.png")
-                                            elif ds_name.lower() in ("nrgbd", "nrgbd"):
-                                                impath = osp.join(dataset.ROOT, scene_id, "images", f"img{im_idx}.png")
-                                        except Exception:
-                                            impath = None
-                                if impath is None or not isinstance(impath, str) or not osp.isfile(impath):
+                                if isinstance(impath, str) and osp.isfile(impath):
+                                    img_paths.append(impath)
+                                    continue
+                                ds_name = v.get("dataset", None)
+                                label = v.get("label", None)
+                                resolved = None
+                                if isinstance(ds_name, str) and isinstance(label, str):
+                                    try:
+                                        scene_id, im_idx = label.rsplit("/", 1)
+                                        if ds_name.lower() == "7scenes":
+                                            candidate = osp.join(dataset.ROOT, scene_id, f"frame-{im_idx}.color.png")
+                                            if osp.isfile(candidate):
+                                                resolved = candidate
+                                        elif ds_name.lower() == "nrgbd":
+                                            candidate = osp.join(dataset.ROOT, scene_id, "images", f"img{im_idx}.png")
+                                            if osp.isfile(candidate):
+                                                resolved = candidate
+                                    except Exception:
+                                        resolved = None
+                                if resolved is None:
                                     raise ValueError("CUT3R requires 'instance' as image path for each view")
-                                img_paths.append(impath)
+                                img_paths.append(resolved)
 
                             # Prepare CUT3R views (strictly following demo.py)
                             images = cut3r_ctx["load_images"](img_paths, size=args.size)
