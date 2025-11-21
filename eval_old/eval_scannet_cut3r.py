@@ -28,6 +28,7 @@ from dust3r.model import ARCroco3DStereo
 from dust3r.utils.image import load_images as cut3r_load_images
 from dust3r.inference import loss_of_one_batch
 from accelerate import Accelerator
+from CUT3R.add_ckpt_path import add_path_to_dust3r
 
 
 if __name__ == "__main__":
@@ -67,7 +68,7 @@ if __name__ == "__main__":
         default=50,
         help="Maximum number of scenes to evaluate",
     )
-    parser.add_argument("--fast3r_ckpt", type=str, default="jedyang97/Fast3R_ViT_Large_512")
+    parser.add_argument("--cut3r_ckpt", type=str, default="/home/jovyan/work/furina/ourVGGT/CUT3R/src/cut3r_512_dpt_4_64.pth")
     parser.add_argument(
         "--vis_attn_map",
         action="store_true",
@@ -85,7 +86,12 @@ if __name__ == "__main__":
     scene_infer_times = defaultdict(list)
     dtype = torch.bfloat16
     device = torch.device(args.device)
-    model = ARCroco3DStereo.from_pretrained(args.fast3r_ckpt)
+    if os.path.exists(args.cut3r_ckpt):
+        add_path_to_dust3r(args.cut3r_ckpt)
+    try:
+        model = ARCroco3DStereo.from_pretrained(args.cut3r_ckpt)
+    except Exception:
+        raise
     model = model.to(device).to(torch.bfloat16).eval()
     accelerator = Accelerator()
 
