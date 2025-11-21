@@ -534,15 +534,8 @@ def main(args):
 
                         pts_gt = gt_pts[j].detach().to(torch.float32).cpu().numpy()[0]
 
-                        H, W = image.shape[:2]
-                        cx = W // 2
-                        cy = H // 2
-                        l, t = cx - 112, cy - 112
-                        r, b = cx + 112, cy + 112
-                        image = image[t:b, l:r]
-                        mask = mask[t:b, l:r]
-                        pts = pts[t:b, l:r]
-                        pts_gt = pts_gt[t:b, l:r]
+                        if args.conf_thresh and args.conf_thresh > 0:
+                            mask = mask & (conf > args.conf_thresh)
 
                         images_all.append(image[None, ...])
                         pts_all.append(pts[None, ...])
