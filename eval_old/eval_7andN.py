@@ -222,12 +222,17 @@ def main(args):
                     with torch.cuda.amp.autocast(dtype=dtype_autocast):
                         if isinstance(batch, dict) and "img" in batch:
                             batch["img"] = (batch["img"] + 1.0) / 2.0
+                            imgs_tensor = batch["img"].to(dtype_autocast)
                         elif isinstance(batch, list) and all(
                             isinstance(v, dict) and "img" in v for v in batch
                         ):
+                            imgs_stack = []
                             for view in batch:
                                 view["img"] = (view["img"] + 1.0) / 2.0
-                            imgs_tensor = torch.cat([v["img"] for v in batch], dim=0)
+                                imgs_stack.append(view["img"].to(dtype_autocast))
+                            imgs_tensor = torch.cat(imgs_stack, dim=0)
+                        else:
+                            raise TypeError("Unsupported batch structure for VGGT evaluation inputs")
 
                     with torch.cuda.amp.autocast(dtype=dtype_autocast):
                         with torch.no_grad():
