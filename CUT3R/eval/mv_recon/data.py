@@ -5,9 +5,9 @@ import numpy as np
 import os.path as osp
 from collections import deque
 import random
-from eval.mv_recon.base import BaseStereoViewDataset
+from .base import BaseStereoViewDataset
 from dust3r.utils.image import imread_cv2
-import eval.mv_recon.dataset_utils.cropping as cropping
+from .dataset_utils import cropping
 
 
 def shuffle_deque(dq, seed=None):
