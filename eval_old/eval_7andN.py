@@ -35,6 +35,7 @@ from torch.utils.data._utils.collate import default_collate
 from tqdm import tqdm
 from collections import defaultdict
 import torchvision.transforms as transforms
+from eval.dust3r.utils.geometry import geotrf
 
 
 def get_args_parser():
@@ -502,6 +503,24 @@ def main(args):
                         traceback.print_exc()
                         continue
 
+                    # verify preds tensor shapes match (B,H,W,3) and (B,H,W)
+                    try:
+                        for j in range(len(preds)):
+                            pts3d = preds[j].get("pts3d_in_other_view")
+                            confm = preds[j].get("conf")
+                            if pts3d is not None and torch.is_tensor(pts3d):
+                                if pts3d.ndim == 3:
+                                    preds[j]["pts3d_in_other_view"] = pts3d.unsqueeze(0)
+                                elif pts3d.ndim == 5 and pts3d.shape[-1] == 3:
+                                    preds[j]["pts3d_in_other_view"] = pts3d.squeeze(1)
+                            if confm is not None and torch.is_tensor(confm):
+                                if confm.ndim == 2:
+                                    preds[j]["conf"] = confm.unsqueeze(0)
+                                elif confm.ndim == 4 and confm.shape[-1] == 1:
+                                    preds[j]["conf"] = confm.squeeze(-1)
+                    except Exception:
+                        pass
+
                     valid_length = len(preds) // args.revisit
                     if args.revisit > 1:
                         preds = preds[-valid_length:]
@@ -525,6 +544,7 @@ def main(args):
                             in_camera1 = view["camera_pose"][0].cpu()
 
                         image = view["img"].permute(0, 2, 3, 1).cpu().numpy()[0]
+                        image = (image + 1.0) / 2.0
                         mask = view["valid_mask"].cpu().numpy()[0]
 
                         pts = pred_pts[j].to(torch.float32).cpu().numpy()[0]
@@ -533,6 +553,18 @@ def main(args):
                         # mask = mask & (conf > 1.8)
 
                         pts_gt = gt_pts[j].detach().to(torch.float32).cpu().numpy()[0]
+
+                        try:
+                            gt_shift_val = float(monitoring.get("gt_shift_z", 0.0))
+                        except Exception:
+                            gt_shift_val = 0.0
+                        if gt_shift_val != 0.0:
+                            pts[..., 2] += gt_shift_val
+                            pts_gt[..., 2] += gt_shift_val
+
+                        if in_camera1 is not None:
+                            pts = geotrf(in_camera1, pts)
+                            pts_gt = geotrf(in_camera1, pts_gt)
 
                         if args.conf_thresh and args.conf_thresh > 0:
                             mask = mask & (conf > args.conf_thresh)
