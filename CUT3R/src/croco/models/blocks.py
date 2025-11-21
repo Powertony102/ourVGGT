@@ -106,7 +106,7 @@ class Attention(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
-        self.rope = rope.float() if rope is not None else None
+        self.rope = rope if rope is not None else None
 
     def forward(self, x, xpos):
         B, N, C = x.shape
@@ -122,11 +122,14 @@ class Attention(nn.Module):
         q_type = q.dtype
         k_type = k.dtype
         if self.rope is not None:
-            q = q.to(torch.float16)
-            k = k.to(torch.float16)
-            with torch.autocast(device_type="cuda", enabled=False):
-                q = self.rope(q, xpos)
-                k = self.rope(k, xpos)
+            try:
+                with torch.autocast(device_type="cuda", enabled=False):
+                    q = self.rope(q, xpos)
+                    k = self.rope(k, xpos)
+            except Exception as e:
+                raise RuntimeError(
+                    f"CUT3R/src/croco/models/blocks.py: Attention.forward RoPE failed; q_dtype={q_type}, k_dtype={k_type}, xpos_dtype={xpos.dtype}, xpos_max={int(xpos.max().item())}, xpos_shape={tuple(xpos.shape)}"
+                ) from e
             q = q.to(q_type)
             k = k.to(k_type)
 
@@ -207,7 +210,7 @@ class CrossAttention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
-        self.rope = rope.float() if rope is not None else None
+        self.rope = rope if rope is not None else None
 
     def forward(self, query, key, value, qpos, kpos):
         B, Nq, C = query.shape
@@ -234,15 +237,23 @@ class CrossAttention(nn.Module):
         k_type = k.dtype
         if self.rope is not None:
             if qpos is not None:
-                q = q.to(torch.float16)
-                with torch.autocast(device_type="cuda", enabled=False):
-                    q = self.rope(q, qpos)
+                try:
+                    with torch.autocast(device_type="cuda", enabled=False):
+                        q = self.rope(q, qpos)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"CUT3R/src/croco/models/blocks.py: CrossAttention.forward RoPE(q) failed; q_dtype={q_type}, qpos_dtype={qpos.dtype}, qpos_max={int(qpos.max().item())}, qpos_shape={tuple(qpos.shape)}"
+                    ) from e
                 q = q.to(q_type)
 
             if kpos is not None:
-                k = k.to(torch.float16)
-                with torch.autocast(device_type="cuda", enabled=False):
-                    k = self.rope(k, kpos)
+                try:
+                    with torch.autocast(device_type="cuda", enabled=False):
+                        k = self.rope(k, kpos)
+                except Exception as e:
+                    raise RuntimeError(
+                        f"CUT3R/src/croco/models/blocks.py: CrossAttention.forward RoPE(k) failed; k_dtype={k_type}, kpos_dtype={kpos.dtype}, kpos_max={int(kpos.max().item())}, kpos_shape={tuple(kpos.shape)}"
+                    ) from e
                 k = k.to(k_type)
 
         # attn = (q @ k.transpose(-2, -1)) * self.scale

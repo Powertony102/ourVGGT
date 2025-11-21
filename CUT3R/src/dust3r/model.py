@@ -613,7 +613,10 @@ class ARCroco3DStereo(CroCoNet):
             raise NotImplementedError
         full_out = [
             torch.zeros(
-                len(views) * batch_size, *img_out[0].shape[1:], device=img_out[0].device
+                len(views) * batch_size,
+                *img_out[0].shape[1:],
+                device=img_out[0].device,
+                dtype=img_out[0].dtype,
             )
             for _ in range(len(img_out))
         ]
@@ -643,7 +646,12 @@ class ARCroco3DStereo(CroCoNet):
             )
         else:
             raymaps = torch.zeros(
-                1, 6, imgs[0].shape[-2], imgs[0].shape[-1], device=img_out[0].device
+                1,
+                6,
+                imgs[0].shape[-2],
+                imgs[0].shape[-1],
+                device=img_out[0].device,
+                dtype=img_out[0].dtype,
             )
             ray_mask_flat = torch.zeros_like(img_masks_flat)
             ray_mask_flat[:1] = True

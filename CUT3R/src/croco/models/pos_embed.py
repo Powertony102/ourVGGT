@@ -151,6 +151,7 @@ except ImportError:
 
         def apply_rope1d(self, tokens, pos1d, cos, sin):
             assert pos1d.ndim == 2
+            pos1d = pos1d.to(torch.long)
             cos = torch.nn.functional.embedding(pos1d, cos)[:, None, :, :]
             sin = torch.nn.functional.embedding(pos1d, sin)[:, None, :, :]
             return (tokens * cos) + (self.rotate_half(tokens) * sin)
@@ -167,9 +168,10 @@ except ImportError:
                 tokens.size(3) % 2 == 0
             ), "number of dimensions should be a multiple of two"
             D = tokens.size(3) // 2
-            assert positions.ndim == 3 and positions.shape[-1] == 2  # Batch, Seq, 2
+            assert positions.ndim == 3 and positions.shape[-1] == 2
+            positions = positions.to(torch.long)
             cos, sin = self.get_cos_sin(
-                D, int(positions.max()) + 1, tokens.device, tokens.dtype
+                D, int(positions.max().item()) + 1, tokens.device, tokens.dtype
             )
             # split features into two along the feature dimension, and apply rope1d on each half
             y, x = tokens.chunk(2, dim=-1)
