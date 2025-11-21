@@ -20,6 +20,9 @@ for p in (FAST3R_PROJECT_DIR, FAST3R_PKG_DIR):
 CUT3R_DIR = os.path.abspath(os.path.join(ROOT_DIR, "CUT3R"))
 if CUT3R_DIR not in sys.path:
     sys.path.insert(0, CUT3R_DIR)
+CUT3R_SRC_DIR = os.path.join(CUT3R_DIR, "src")
+if CUT3R_SRC_DIR not in sys.path:
+    sys.path.insert(0, CUT3R_SRC_DIR)
 
 import time
 import torch
