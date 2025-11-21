@@ -469,21 +469,21 @@ def main(args):
 
                             preds_raw = output_dict["preds"]
                             ress = []
-                        for s, pred in enumerate(preds_raw):
-                            pts = pred["pts3d_in_other_view"]
-                            conf = pred.get("conf", None)
-                            res = {
-                                "pts3d_in_other_view": pts,
-                                "conf": conf if conf is not None else torch.ones_like(pts[..., 0]),
-                            }
-                            if (
-                                isinstance(views, list)
-                                and s < len(views)
-                                and "valid_mask" in views[s]
-                            ):
-                                res["valid_mask"] = views[s]["valid_mask"]
-                            ress.append(res)
-                        preds = ress
+                            for s, pred in enumerate(preds_raw):
+                                pts = pred["pts3d_in_other_view"]
+                                conf = pred.get("conf", None)
+                                res = {
+                                    "pts3d_in_other_view": pts,
+                                    "conf": conf if conf is not None else torch.ones_like(pts[..., 0]),
+                                }
+                                if (
+                                    isinstance(views, list)
+                                    and s < len(views)
+                                    and "valid_mask" in views[s]
+                                ):
+                                    res["valid_mask"] = views[s]["valid_mask"]
+                                ress.append(res)
+                            preds = ress
                     except Exception as e:
                         import traceback
                         print(f"{model_name} inference failed: {e}")
