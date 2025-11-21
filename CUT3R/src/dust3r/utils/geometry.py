@@ -116,11 +116,27 @@ def geotrf(Trf, pts, ncol=None, norm=False):
 
 
 def inv(mat):
-    """Invert a torch or numpy matrix"""
+    """Invert a torch or numpy matrix with safe dtype handling"""
     if isinstance(mat, torch.Tensor):
-        return torch.linalg.inv(mat)
+        dtype = mat.dtype
+        device = mat.device
+        mat32 = mat.to(torch.float32)
+        try:
+            inv32 = torch.linalg.inv(mat32)
+        except RuntimeError:
+            inv32 = torch.linalg.pinv(mat32)
+        return inv32.to(dtype).to(device)
     if isinstance(mat, np.ndarray):
-        return np.linalg.inv(mat)
+        mat = np.asarray(mat)
+        if mat.dtype in (np.float16, np.float32, np.float64):
+            mat32 = mat.astype(np.float32, copy=False)
+        else:
+            mat32 = mat.astype(np.float32)
+        try:
+            inv32 = np.linalg.inv(mat32)
+        except np.linalg.LinAlgError:
+            inv32 = np.linalg.pinv(mat32)
+        return inv32.astype(mat.dtype, copy=False)
     raise ValueError(f"bad matrix type = {type(mat)}")
 
 
