@@ -563,7 +563,9 @@ def main(args):
 
                     for j, view in enumerate(batch):
                         if in_camera1 is None:
-                            in_camera1 = view["camera_pose"][0].cpu()
+                            in_camera1 = (
+                                view["camera_pose"][0].to(torch.float32).cpu().numpy()
+                            )
 
                         image = (
                             view["img"].permute(0, 2, 3, 1).to(torch.float32).cpu().numpy()[0]
