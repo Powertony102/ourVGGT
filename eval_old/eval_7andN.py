@@ -400,11 +400,13 @@ def main(args):
                                     if torch.is_tensor(t) and t.dtype in (torch.float32, torch.float16):
                                         raise TypeError("Non-bfloat16 tensor found in CUT3R inputs")
 
-                            torch.cuda.synchronize()
-                            start = time.time()
-                            outputs, state_args = cut3r_ctx["inference"](cut3r_views, model, args.device.split(":")[0])
-                            torch.cuda.synchronize()
-                            end = time.time()
+                            with torch.cuda.amp.autocast(enabled=True, dtype=torch.bfloat16):
+                                torch.cuda.synchronize()
+                                start = time.time()
+                                output = model(cut3r_views)
+                                torch.cuda.synchronize()
+                                end = time.time()
+                            outputs = {"pred": output.ress, "views": output.views}
                             elapsed_s = end - start
                             frame_count = len(cut3r_views)
                             fps = frame_count / elapsed_s if elapsed_s > 0 else float("inf")
