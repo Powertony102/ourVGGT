@@ -284,7 +284,19 @@ def main(args):
                             img_paths = []
                             for v in views:
                                 impath = v.get("instance", None)
-                                if impath is None or not isinstance(impath, str):
+                                if not (isinstance(impath, str) and osp.isfile(impath)):
+                                    ds_name = v.get("dataset", None)
+                                    label = v.get("label", None)
+                                    if isinstance(ds_name, str) and isinstance(label, str):
+                                        try:
+                                            scene_id, im_idx = label.rsplit("/", 1)
+                                            if ds_name.lower() in ("7scenes", "7scenes", "7scenes"):
+                                                impath = osp.join(dataset.ROOT, scene_id, f"frame-{im_idx}.color.png")
+                                            elif ds_name.lower() in ("nrgbd", "nrgbd"):
+                                                impath = osp.join(dataset.ROOT, scene_id, "images", f"img{im_idx}.png")
+                                        except Exception:
+                                            impath = None
+                                if impath is None or not isinstance(impath, str) or not osp.isfile(impath):
                                     raise ValueError("CUT3R requires 'instance' as image path for each view")
                                 img_paths.append(impath)
 
