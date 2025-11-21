@@ -133,6 +133,24 @@ if __name__ == "__main__":
 
         try:
             cut3r_views = cut3r_load_images([str(p) for p in image_paths], size=512, verbose=False)
+            for v_idx, v in enumerate(cut3r_views):
+                try:
+                    B, C, H, W = v["img"].shape
+                    if "img_mask" not in v:
+                        v["img_mask"] = torch.ones((B,), dtype=torch.bool)
+                    if "ray_mask" not in v:
+                        v["ray_mask"] = torch.ones((B,), dtype=torch.bool)
+                    if "reset" not in v:
+                        v["reset"] = torch.zeros((B,), dtype=torch.bool)
+                    if "ray_map" not in v:
+                        # shape: (B, H, W, 6)
+                        v["ray_map"] = torch.zeros((B, H, W, 6), dtype=v["img"].dtype)
+                    # move tensors to device
+                    for k, val in list(v.items()):
+                        if torch.is_tensor(val):
+                            v[k] = val.to(device, non_blocking=True)
+                except Exception as e:
+                    raise RuntimeError(f"Invalid view data at index {v_idx}: {e}. Required keys: img, img_mask, ray_mask, ray_map, reset")
             start = time.time()
             output, _ = loss_of_one_batch(
                 cut3r_views,
