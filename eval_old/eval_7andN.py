@@ -35,7 +35,29 @@ from torch.utils.data._utils.collate import default_collate
 from tqdm import tqdm
 from collections import defaultdict
 import torchvision.transforms as transforms
-from eval.dust3r.utils.geometry import geotrf
+try:
+    from src.dust3r.utils.geometry import geotrf
+except Exception:
+    try:
+        from fast3r.dust3r.utils.geometry import geotrf
+    except Exception:
+        import numpy as _np
+        import torch as _torch
+        def geotrf(Trf, pts, ncol=None, norm=False):
+            if isinstance(Trf, _torch.Tensor):
+                Trf = Trf.detach().cpu().numpy()
+            else:
+                Trf = _np.asarray(Trf)
+            if isinstance(pts, _torch.Tensor):
+                pts = pts.detach().cpu().numpy()
+            else:
+                pts = _np.asarray(pts)
+            R = Trf[:3, :3]
+            t = Trf[:3, 3]
+            res = _np.einsum("ij,...j->...i", R, pts) + t
+            if ncol is not None:
+                res = res[..., :ncol]
+            return res
 
 
 def get_args_parser():
