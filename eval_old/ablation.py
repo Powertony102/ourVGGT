@@ -83,14 +83,14 @@ def main(args):
         raise PermissionError(f"NRGBD root not accessible: {args.nrgbd_root}")
 
     datasets_all = {
-        "7scenes": SevenScenes(
-            split="test",
-            ROOT="/home/jovyan/shared/xinzeli/fastplus/7-scenes",
-            resolution=resolution,
-            num_seq=1,
-            full_video=True,
-            kf_every=args.kf,
-        ),  # 20),
+        # "7scenes": SevenScenes(
+        #     split="test",
+        #     ROOT="/home/jovyan/shared/xinzeli/fastplus/7-scenes",
+        #     resolution=resolution,
+        #     num_seq=1,
+        #     full_video=True,
+        #     kf_every=args.kf,
+        # ),  # 20),
         "NRGBD": NRGBD(
             split="test",
             ROOT=args.nrgbd_root,
