@@ -22,6 +22,9 @@ if CUT3R_DIR not in sys.path:
 CUT3R_SRC_DIR = os.path.join(CUT3R_DIR, "src")
 if CUT3R_SRC_DIR not in sys.path:
     sys.path.insert(0, CUT3R_SRC_DIR)
+CUT3R_EVAL_DIR = os.path.join(CUT3R_DIR, "eval")
+if CUT3R_EVAL_DIR not in sys.path:
+    sys.path.insert(0, CUT3R_EVAL_DIR)
 
 import time
 import torch
@@ -63,8 +66,8 @@ def get_args_parser():
 def main(args):
     from CUT3R.add_ckpt_path import add_path_to_dust3r
     add_path_to_dust3r(args.weights)
-    from eval.mv_recon.data import SevenScenes, NRGBD
-    from eval.mv_recon.utils import accuracy, completion
+    from mv_recon.data import SevenScenes, NRGBD
+    from mv_recon.utils import accuracy, completion
 
     if args.size == 512:
         resolution = (512, 384)
