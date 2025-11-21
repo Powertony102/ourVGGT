@@ -247,33 +247,23 @@ def main(args):
                                 in_camera1 = view["camera_pose"][0].cpu()
 
                             image = view["img"].permute(0, 2, 3, 1).cpu().numpy()[0]
+                            image = (image + 1.0) / 2.0
                             mask = view["valid_mask"].cpu().numpy()[0]
 
-                            # pts = preds[j]['pts3d' if j==0 else 'pts3d_in_other_view'].detach().cpu().numpy()[0]
                             pts = pred_pts[j].cpu().numpy()[0]
                             conf = preds[j]["conf"].cpu().data.numpy()[0]
-                            # mask = mask & (conf > 1.8)
+                            if args.conf_thresh and args.conf_thresh > 0:
+                                mask = mask & (conf > args.conf_thresh)
 
                             pts_gt = gt_pts[j].detach().cpu().numpy()[0]
 
-                            H, W = image.shape[:2]
-                            cx = W // 2
-                            cy = H // 2
-                            l, t = cx - 112, cy - 112
-                            r, b = cx + 112, cy + 112
-                            image = image[t:b, l:r]
-                            mask = mask[t:b, l:r]
-                            pts = pts[t:b, l:r]
-                            pts_gt = pts_gt[t:b, l:r]
-
-                            #### Align predicted 3D points to the ground truth
+                            # restore absolute depth and unify coords
                             pts[..., -1] += gt_shift_z.cpu().numpy().item()
-                            pts = geotrf(in_camera1, pts)
-
                             pts_gt[..., -1] += gt_shift_z.cpu().numpy().item()
+                            pts = geotrf(in_camera1, pts)
                             pts_gt = geotrf(in_camera1, pts_gt)
 
-                            images_all.append((image[None, ...] + 1.0) / 2.0)
+                            images_all.append(image[None, ...])
                             pts_all.append(pts[None, ...])
                             pts_gt_all.append(pts_gt[None, ...])
                             masks_all.append(mask[None, ...])
@@ -286,18 +276,6 @@ def main(args):
 
                     scene_id = view["label"][0].rsplit("/", 1)[0]
 
-                    save_params = {}
-
-                    save_params["images_all"] = images_all
-                    save_params["pts_all"] = pts_all
-                    save_params["pts_gt_all"] = pts_gt_all
-                    save_params["masks_all"] = masks_all
-
-                    np.save(
-                        os.path.join(save_path, f"{scene_id.replace('/', '_')}.npy"),
-                        save_params,
-                    )
-
                     if "DTU" in name_data:
                         threshold = 100
                     else:
@@ -307,33 +285,48 @@ def main(args):
                     pts_gt_all_masked = pts_gt_all[masks_all > 0]
                     images_all_masked = images_all[masks_all > 0]
 
-                    pcd = o3d.geometry.PointCloud()
-                    pcd.points = o3d.utility.Vector3dVector(
-                        pts_all_masked.reshape(-1, 3)
-                    )
-                    pcd.colors = o3d.utility.Vector3dVector(
-                        images_all_masked.reshape(-1, 3)
-                    )
-                    o3d.io.write_point_cloud(
-                        os.path.join(
-                            save_path, f"{scene_id.replace('/', '_')}-mask.ply"
-                        ),
-                        pcd,
-                    )
+                    mask = np.isfinite(pts_all_masked)
+                    pts_all_masked = pts_all_masked[mask]
 
-                    pcd_gt = o3d.geometry.PointCloud()
-                    pcd_gt.points = o3d.utility.Vector3dVector(
-                        pts_gt_all_masked.reshape(-1, 3)
-                    )
-                    pcd_gt.colors = o3d.utility.Vector3dVector(
-                        images_all_masked.reshape(-1, 3)
-                    )
-                    o3d.io.write_point_cloud(
-                        os.path.join(save_path, f"{scene_id.replace('/', '_')}-gt.ply"),
-                        pcd_gt,
-                    )
+                    mask_gt = np.isfinite(pts_gt_all_masked)
+                    pts_gt_all_masked = pts_gt_all_masked[mask_gt]
+                    images_all_masked = images_all_masked[mask]
+
+                    pts_all_masked = pts_all_masked.reshape(-1, 3)
+                    pts_gt_all_masked = pts_gt_all_masked.reshape(-1, 3)
+                    images_all_masked = images_all_masked.reshape(-1, 3)
+
+                    if pts_all_masked.shape[0] > 999999:
+                        sample_indices = np.random.choice(
+                            pts_all_masked.shape[0], 999999, replace=False
+                        )
+                        pts_all_masked = pts_all_masked[sample_indices]
+                        images_all_masked = images_all_masked[sample_indices]
+
+                    if pts_gt_all_masked.shape[0] > 999999:
+                        sample_indices_gt = np.random.choice(
+                            pts_gt_all_masked.shape[0], 999999, replace=False
+                        )
+                        pts_gt_all_masked = pts_gt_all_masked[sample_indices_gt]
 
                     trans_init = np.eye(4)
+
+                    # Guard against empty point clouds
+                    if pts_all_masked.shape[0] == 0 or pts_gt_all_masked.shape[0] == 0:
+                        print(f"Empty point cloud for {scene_id}; skipping metrics for this scene")
+                        print(
+                            f"Empty point cloud for {scene_id}; skipping metrics for this scene",
+                            file=open(log_file, "a"),
+                        )
+                        continue
+
+                    pcd = o3d.geometry.PointCloud()
+                    pcd.points = o3d.utility.Vector3dVector(pts_all_masked)
+                    pcd.colors = o3d.utility.Vector3dVector(images_all_masked)
+
+                    pcd_gt = o3d.geometry.PointCloud()
+                    pcd_gt.points = o3d.utility.Vector3dVector(pts_gt_all_masked)
+                    pcd_gt.colors = o3d.utility.Vector3dVector(images_all_masked)
 
                     reg_p2p = o3d.pipelines.registration.registration_icp(
                         pcd,
