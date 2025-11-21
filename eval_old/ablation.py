@@ -263,6 +263,46 @@ def main(args):
                             )
                         ress.append(res)
                     preds = ress
+                    # Evaluation for VGGT
+                    print(f"Evaluation for {name_data} {data_idx+1}/{len(dataset)}")
+                    gt_pts, pred_pts, gt_factor, pr_factor, masks, monitoring = (
+                        criterion.get_all_pts3d_t(batch, preds)
+                    )
+
+                    in_camera1 = None
+                    pts_all = []
+                    pts_gt_all = []
+                    images_all = []
+                    masks_all = []
+                    conf_all = []
+
+                    for j, view in enumerate(batch):
+                        if in_camera1 is None:
+                            in_camera1 = view["camera_pose"][0].cpu()
+
+                        image = view["img"].permute(0, 2, 3, 1).cpu().numpy()[0]
+                        mask = view["valid_mask"].cpu().numpy()[0]
+
+                        pts = pred_pts[j].to(torch.float32).cpu().numpy()[0]
+                        conf = preds[j]["conf"].to(torch.float32).cpu().data.numpy()[0]
+
+                        pts_gt = gt_pts[j].detach().to(torch.float32).cpu().numpy()[0]
+
+                        H, W = image.shape[:2]
+                        cx = W // 2
+                        cy = H // 2
+                        l, t = cx - 112, cy - 112
+                        r, b = cx + 112, cy + 112
+                        image = image[t:b, l:r]
+                        mask = mask[t:b, l:r]
+                        pts = pts[t:b, l:r]
+                        pts_gt = pts_gt[t:b, l:r]
+
+                        images_all.append(image[None, ...])
+                        pts_all.append(pts[None, ...])
+                        pts_gt_all.append(pts_gt[None, ...])
+                        masks_all.append(mask[None, ...])
+                        conf_all.append(conf[None, ...])
                 else:
                     views = batch
                     try:
