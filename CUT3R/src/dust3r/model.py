@@ -797,10 +797,10 @@ class ARCroco3DStereo(CroCoNet):
             mem, global_img_feat_i, out_pose_feat_i
         )
         head_input = [
-            dec[0].float(),
-            dec[self.dec_depth * 2 // 4][:, 1:].float(),
-            dec[self.dec_depth * 3 // 4][:, 1:].float(),
-            dec[self.dec_depth].float(),
+            dec[0],
+            dec[self.dec_depth * 2 // 4][:, 1:],
+            dec[self.dec_depth * 3 // 4][:, 1:],
+            dec[self.dec_depth],
         ]
         res = self._downstream_head(head_input, shape_i, pos=pos_i)
         img_mask = views[i]["img_mask"]
@@ -809,14 +809,14 @@ class ARCroco3DStereo(CroCoNet):
             update_mask = img_mask & update  # if don't update, then whatever img_mask
         else:
             update_mask = img_mask
-        update_mask = update_mask[:, None, None].float()
+        update_mask = update_mask[:, None, None].to(new_state_feat.dtype)
         state_feat = new_state_feat * update_mask + state_feat * (
             1 - update_mask
         )  # update global state
         mem = new_mem * update_mask + mem * (1 - update_mask)  # then update local state
         reset_mask = views[i]["reset"]
         if reset_mask is not None:
-            reset_mask = reset_mask[:, None, None].float()
+            reset_mask = reset_mask[:, None, None].to(new_state_feat.dtype)
             state_feat = init_state_feat * reset_mask + state_feat * (1 - reset_mask)
             mem = init_mem * reset_mask + mem * (1 - reset_mask)
         return res, (state_feat, mem)
@@ -863,10 +863,10 @@ class ARCroco3DStereo(CroCoNet):
             )
             assert len(dec) == self.dec_depth + 1
             head_input = [
-                dec[0].float(),
-                dec[self.dec_depth * 2 // 4][:, 1:].float(),
-                dec[self.dec_depth * 3 // 4][:, 1:].float(),
-                dec[self.dec_depth].float(),
+                dec[0],
+                dec[self.dec_depth * 2 // 4][:, 1:],
+                dec[self.dec_depth * 3 // 4][:, 1:],
+                dec[self.dec_depth],
             ]
             res = self._downstream_head(head_input, shape[i], pos=pos_i)
             ress.append(res)
@@ -878,7 +878,7 @@ class ARCroco3DStereo(CroCoNet):
                 )  # if don't update, then whatever img_mask
             else:
                 update_mask = img_mask
-            update_mask = update_mask[:, None, None].float()
+            update_mask = update_mask[:, None, None].to(new_state_feat.dtype)
             state_feat = new_state_feat * update_mask + state_feat * (
                 1 - update_mask
             )  # update global state
@@ -887,7 +887,7 @@ class ARCroco3DStereo(CroCoNet):
             )  # then update local state
             reset_mask = views[i]["reset"]
             if reset_mask is not None:
-                reset_mask = reset_mask[:, None, None].float()
+                reset_mask = reset_mask[:, None, None].to(new_state_feat.dtype)
                 state_feat = init_state_feat * reset_mask + state_feat * (
                     1 - reset_mask
                 )
@@ -960,10 +960,10 @@ class ARCroco3DStereo(CroCoNet):
         )
         assert len(dec) == self.dec_depth + 1
         head_input = [
-            dec[0].float(),
-            dec[self.dec_depth * 2 // 4][:, 1:].float(),
-            dec[self.dec_depth * 3 // 4][:, 1:].float(),
-            dec[self.dec_depth].float(),
+            dec[0],
+            dec[self.dec_depth * 2 // 4][:, 1:],
+            dec[self.dec_depth * 3 // 4][:, 1:],
+            dec[self.dec_depth],
         ]
         res = self._downstream_head(head_input, shape, pos=pos_i)
         return res, view
@@ -1071,10 +1071,10 @@ class ARCroco3DStereo(CroCoNet):
             )
             assert len(dec) == self.dec_depth + 1
             head_input = [
-                dec[0].float(),
-                dec[self.dec_depth * 2 // 4][:, 1:].float(),
-                dec[self.dec_depth * 3 // 4][:, 1:].float(),
-                dec[self.dec_depth].float(),
+                dec[0],
+                dec[self.dec_depth * 2 // 4][:, 1:],
+                dec[self.dec_depth * 3 // 4][:, 1:],
+                dec[self.dec_depth],
             ]
             res = self._downstream_head(head_input, shape, pos=pos_i)
             ress.append(res)
@@ -1086,7 +1086,7 @@ class ARCroco3DStereo(CroCoNet):
                 )  # if don't update, then whatever img_mask
             else:
                 update_mask = img_mask
-            update_mask = update_mask[:, None, None].float()
+            update_mask = update_mask[:, None, None].to(new_state_feat.dtype)
             state_feat = new_state_feat * update_mask + state_feat * (
                 1 - update_mask
             )  # update global state
@@ -1095,7 +1095,7 @@ class ARCroco3DStereo(CroCoNet):
             )  # then update local state
             reset_mask = view["reset"]
             if reset_mask is not None:
-                reset_mask = reset_mask[:, None, None].float()
+                reset_mask = reset_mask[:, None, None].to(new_state_feat.dtype)
                 state_feat = init_state_feat * reset_mask + state_feat * (
                     1 - reset_mask
                 )

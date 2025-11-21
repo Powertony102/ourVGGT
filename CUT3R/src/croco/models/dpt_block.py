@@ -132,19 +132,19 @@ class ResidualConvUnit_custom(nn.Module):
         """
 
         out = self.activation(x)
-        out = self.conv1(out)
+        out = self.conv1(out.to(self.conv1.weight.dtype))
         if self.bn == True:
             out = self.bn1(out)
 
         out = self.activation(out)
-        out = self.conv2(out)
+        out = self.conv2(out.to(self.conv2.weight.dtype))
         if self.bn == True:
             out = self.bn2(out)
 
         if self.groups > 1:
             out = self.conv_merge(out)
 
-        return self.skip_add.add(out, x)
+        return self.skip_add.add(out, x.to(out.dtype))
 
 
 class FeatureFusionBlock_custom(nn.Module):
@@ -206,7 +206,8 @@ class FeatureFusionBlock_custom(nn.Module):
                     res, size=(output.shape[2], output.shape[3]), mode="bilinear"
                 )
 
-            output = self.skip_add.add(output, res)
+            dtype_res = res.dtype
+            output = self.skip_add.add(output.to(dtype_res), res)
             # output += res
 
         output = self.resConfUnit2(output)
@@ -228,7 +229,7 @@ class FeatureFusionBlock_custom(nn.Module):
                 mode="bilinear",
                 align_corners=self.align_corners,
             )
-        output = self.out_conv(output)
+        output = self.out_conv(output.to(self.out_conv.weight.dtype))
         return output
 
 
@@ -498,8 +499,10 @@ class DPTOutputAdapter(nn.Module):
         ]
 
         layers = [self.act_postprocess[idx](l) for idx, l in enumerate(layers)]
-        # Project layers to chosen feature dim
-        layers = [self.scratch.layer_rn[idx](l) for idx, l in enumerate(layers)]
+        layers = [
+            self.scratch.layer_rn[idx](l.to(self.scratch.layer_rn[idx].weight.dtype))
+            for idx, l in enumerate(layers)
+        ]
 
         # Fuse layers using refinement stages
         path_4 = self.scratch.refinenet4(layers[3])

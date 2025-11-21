@@ -77,13 +77,12 @@ class ManyAR_PatchEmbed(PatchEmbed):
         pos = img.new_zeros((B, n_tokens, 2), dtype=torch.int64)
 
         x[is_landscape] = (
-            self.proj(img[is_landscape]).permute(0, 2, 3, 1).flatten(1, 2).float()
+            self.proj(img[is_landscape]).permute(0, 2, 3, 1).flatten(1, 2)
         )
         x[is_portrait] = (
             self.proj(img[is_portrait].swapaxes(-1, -2))
             .permute(0, 2, 3, 1)
             .flatten(1, 2)
-            .float()
         )
 
         pos[is_landscape] = self.position_getter(1, H, W, pos.device)

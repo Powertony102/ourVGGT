@@ -354,11 +354,6 @@ def main(args):
                                         "reset": torch.tensor(False, device=img.device).unsqueeze(0),
                                     }
                                 )
-                                # ensure all float tensors are bfloat16
-                                for v in cut3r_views:
-                                    for k, t in list(v.items()):
-                                        if torch.is_tensor(t) and t.dtype in (torch.float32, torch.float16, torch.bfloat16):
-                                            v[k] = t.to(torch.bfloat16)
                             else:
                                 cut3r_views = []
                                 for i, v in enumerate(views):
@@ -388,11 +383,6 @@ def main(args):
                                         "reset": torch.tensor(False, device=img.device).unsqueeze(0),
                                     }
                                 )
-                                # ensure all float tensors are bfloat16
-                                for v in cut3r_views:
-                                    for k, t in list(v.items()):
-                                        if torch.is_tensor(t) and t.dtype in (torch.float32, torch.float16, torch.bfloat16):
-                                            v[k] = t.to(torch.bfloat16)
                             if not printed_preproc_dtype:
                                 try:
                                     dtypes = {k: (v[k].dtype if torch.is_tensor(v[k]) else type(v[k])) for k in cut3r_views[0].keys()}
