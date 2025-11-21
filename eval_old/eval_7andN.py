@@ -330,13 +330,18 @@ def main(args):
                                             "true_shape": true_shape,
                                             "idx": i,
                                             "instance": str(i),
-                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device),
+                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device).to(torch.bfloat16),
                                             "img_mask": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "ray_mask": torch.tensor(False, device=img.device).unsqueeze(0),
                                             "update": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "reset": torch.tensor(False, device=img.device).unsqueeze(0),
                                         }
                                     )
+                                # ensure all float tensors are bfloat16
+                                for v in cut3r_views:
+                                    for k, t in list(v.items()):
+                                        if torch.is_tensor(t) and t.dtype in (torch.float32, torch.float16, torch.bfloat16):
+                                            v[k] = t.to(torch.bfloat16)
                             else:
                                 cut3r_views = []
                                 for i, v in enumerate(views):
@@ -358,13 +363,18 @@ def main(args):
                                             "true_shape": true_shape,
                                             "idx": i,
                                             "instance": str(i),
-                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device),
+                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device).to(torch.bfloat16),
                                             "img_mask": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "ray_mask": torch.tensor(False, device=img.device).unsqueeze(0),
                                             "update": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "reset": torch.tensor(False, device=img.device).unsqueeze(0),
                                         }
                                     )
+                                # ensure all float tensors are bfloat16
+                                for v in cut3r_views:
+                                    for k, t in list(v.items()):
+                                        if torch.is_tensor(t) and t.dtype in (torch.float32, torch.float16, torch.bfloat16):
+                                            v[k] = t.to(torch.bfloat16)
 
                             torch.cuda.synchronize()
                             start = time.time()
