@@ -327,10 +327,14 @@ def main(args):
                         print(f"Fast3R inference failed: {e}")
                         continue
 
-                    valid_length = len(preds) // args.revisit
-                    if args.revisit > 1:
+                    total_preds = len(preds)
+                    if args.revisit > 1 and total_preds >= args.revisit:
+                        valid_length = max(1, total_preds // args.revisit)
                         preds = preds[-valid_length:]
-                        batch = batch[-valid_length:]
+                        if isinstance(batch, list):
+                            batch = batch[-valid_length:]
+                    else:
+                        valid_length = total_preds
 
                     # Evaluation
                     print(f"Evaluation for {name_data} {data_idx+1}/{len(dataset)}")
@@ -375,6 +379,9 @@ def main(args):
                         masks_all.append(mask[None, ...])
                         conf_all.append(conf[None, ...])
 
+                if len(images_all) == 0:
+                    print(f"No valid aggregated arrays for {name_data} {data_idx+1}/{len(dataset)}; skipping.")
+                    continue
                 images_all = np.concatenate(images_all, axis=0)
                 pts_all = np.concatenate(pts_all, axis=0)
                 pts_gt_all = np.concatenate(pts_gt_all, axis=0)
