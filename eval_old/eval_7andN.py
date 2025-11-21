@@ -115,7 +115,7 @@ def main(args):
     from criterion import Regr3D_t_ScaleShiftInv, L21
 
     dtype = torch.bfloat16
-    if model_name.upper() == "VGGT":Input type (float) and bias type (c10::BFloat16) should be the same
+    if model_name.upper() == "VGGT":
         model = VGGT(merging=args.merging, enable_point=True)
         ckpt = torch.load(args.ckpt_path, map_location="cpu")
         model.load_state_dict(ckpt, strict=False)
