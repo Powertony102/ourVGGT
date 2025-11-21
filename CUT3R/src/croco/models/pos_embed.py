@@ -115,15 +115,11 @@ def interpolate_pos_embed(model, checkpoint_model):
 # ----------------------------------------------------------
 
 try:
-    from models.curope import cuRoPE2D
-
-    RoPE2D = cuRoPE2D
+    from models.curope import cuRoPE2D as _CuImpl
 except ImportError:
-    print(
-        "Warning, cannot find cuda-compiled version of RoPE2D, using a slow pytorch version instead"
-    )
+    _CuImpl = None
 
-    class RoPE2D(torch.nn.Module):
+class PyRoPE2D(torch.nn.Module):
 
         def __init__(self, freq=100.0, F0=1.0):
             super().__init__()
@@ -179,3 +175,14 @@ except ImportError:
             x = self.apply_rope1d(x, positions[:, :, 1], cos, sin)
             tokens = torch.cat((y, x), dim=-1)
             return tokens
+
+class RoPE2D(torch.nn.Module):
+    def __init__(self, freq=100.0, F0=1.0):
+        super().__init__()
+        self._py = PyRoPE2D(freq=freq, F0=F0)
+        self._cu = _CuImpl(freq=freq, F0=F0) if _CuImpl is not None else None
+
+    def forward(self, tokens, positions):
+        if self._cu is None or tokens.dtype == torch.bfloat16:
+            return self._py(tokens, positions)
+        return self._cu(tokens, positions)
