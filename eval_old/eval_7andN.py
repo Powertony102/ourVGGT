@@ -132,6 +132,11 @@ def main(args):
         model = model.to(device_obj).to(torch.bfloat16).eval()
         lit_module = MultiViewDUSt3RLitModule.load_for_inference(model)
         lit_module.eval()
+        try:
+            p = next(model.parameters())
+            print(f"Model selected: {model_name}, class={model.__class__.__name__}, param_dtype={p.dtype}")
+        except Exception:
+            print(f"Model selected: {model_name}, class={model.__class__.__name__}")
     else:
         # CUT3R
         if model_name.upper() == "CUT3R":
@@ -147,6 +152,11 @@ def main(args):
             model = ARCroco3DStereo.from_pretrained(args.cut3r_model_path)
             model = model.to(device_obj).to(torch.bfloat16).eval()
             cut3r_ctx = {"inference": cut3r_inference, "load_images": cut3r_load_images, "device": device_obj}
+            try:
+                p = next(model.parameters())
+                print(f"Model selected: {model_name}, class={model.__class__.__name__}, param_dtype={p.dtype}")
+            except Exception:
+                print(f"Model selected: {model_name}, class={model.__class__.__name__}")
         else:
             raise ValueError(f"Unsupported model_name: {model_name}")
     os.makedirs(osp.join(args.output_dir, f"{args.kf}"), exist_ok=True)
@@ -169,6 +179,7 @@ def main(args):
             nc2_all_med = 0
             scene_infer_times = defaultdict(list)
 
+            printed_preproc_dtype = False
             for data_idx in tqdm(range(len(dataset))):
                 batch = default_collate([dataset[data_idx]])
                 ignore_keys = set(
@@ -375,6 +386,17 @@ def main(args):
                                     for k, t in list(v.items()):
                                         if torch.is_tensor(t) and t.dtype in (torch.float32, torch.float16, torch.bfloat16):
                                             v[k] = t.to(torch.bfloat16)
+                            if not printed_preproc_dtype:
+                                try:
+                                    dtypes = {k: (v[k].dtype if torch.is_tensor(v[k]) else type(v[k])) for k in cut3r_views[0].keys()}
+                                    print(f"Input dtypes(CUT3R): {dtypes}")
+                                except Exception:
+                                    pass
+                                printed_preproc_dtype = True
+                            for v in cut3r_views:
+                                for k, t in list(v.items()):
+                                    if torch.is_tensor(t) and t.dtype in (torch.float32, torch.float16):
+                                        raise TypeError("Non-bfloat16 tensor found in CUT3R inputs")
 
                             torch.cuda.synchronize()
                             start = time.time()
@@ -464,7 +486,7 @@ def main(args):
                             ress.append(res)
                         preds = ress
                     except Exception as e:
-                        print(f"Fast3R inference failed: {e}")
+                        print(f"{model_name} inference failed: {e}")
                         continue
 
                     valid_length = len(preds) // args.revisit
