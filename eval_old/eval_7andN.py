@@ -16,6 +16,11 @@ for p in (FAST3R_PROJECT_DIR, FAST3R_PKG_DIR):
     if p not in sys.path:
         sys.path.append(p)
 
+# CUT3R project path for imports
+CUT3R_DIR = os.path.abspath(os.path.join(ROOT_DIR, "CUT3R"))
+if CUT3R_DIR not in sys.path:
+    sys.path.insert(0, CUT3R_DIR)
+
 import time
 import torch
 import argparse
@@ -57,6 +62,7 @@ def get_args_parser():
     )
     parser.add_argument("--kf", type=int, default=2, help="key frame")
     parser.add_argument("--nrgbd_root", type=str, default="/home/jovyan/shared/xinzeli/fastplus/nrgbd/")
+    parser.add_argument("--cut3r_model_path", type=str, default=os.path.join("CUT3R", "src", "cut3r_512_dpt_4_64.pth"))
     # parser.add_argument("--7scenes_root", type=str, default="/home/jovyan/shared/xinzeli/fastplus/7-scenes")
     return parser
 
@@ -124,7 +130,22 @@ def main(args):
         lit_module = MultiViewDUSt3RLitModule.load_for_inference(model)
         lit_module.eval()
     else:
-        raise ValueError(f"Unsupported model_name: {model_name}")
+        # CUT3R
+        if model_name.upper() == "CUT3R":
+            try:
+                from CUT3R.add_ckpt_path import add_path_to_dust3r
+                add_path_to_dust3r(args.cut3r_model_path)
+                from src.dust3r.model import ARCroco3DStereo
+                from src.dust3r.inference import inference as cut3r_inference
+                from src.dust3r.utils.image import load_images as cut3r_load_images
+            except Exception as e:
+                raise ImportError(f"Failed to import CUT3R modules: {e}")
+            device_obj = torch.device(args.device)
+            model = ARCroco3DStereo.from_pretrained(args.cut3r_model_path)
+            model = model.to(device_obj).to(torch.bfloat16).eval()
+            cut3r_ctx = {"inference": cut3r_inference, "load_images": cut3r_load_images, "device": device_obj}
+        else:
+            raise ValueError(f"Unsupported model_name: {model_name}")
     os.makedirs(osp.join(args.output_dir, f"{args.kf}"), exist_ok=True)
 
     criterion = Regr3D_t_ScaleShiftInv(L21, norm_mode=False, gt_scale=True)
@@ -254,48 +275,118 @@ def main(args):
                 else:
                     views = batch
                     try:
-                        fast3r_views = []
-                        for v in views:
-                            img_batched = v["img"]
-                            true_shape_batched = v.get("true_shape")
-                            idx_val = v.get("idx", 0)
-                            if torch.is_tensor(idx_val):
-                                idx_val = int(idx_val.item())
-                            else:
-                                idx_val = int(idx_val)
-                            fast3r_views.append(
-                                dict(
-                                    img=img_batched,
-                                    true_shape=true_shape_batched,
-                                    idx=idx_val,
-                                    instance=str(v.get("instance", "")),
+                        # CUT3R branch
+                        if model_name.upper() == "CUT3R":
+                            # Build image paths from dataset views
+                            img_paths = []
+                            for v in views:
+                                impath = v.get("instance", None)
+                                if impath is None or not isinstance(impath, str):
+                                    raise ValueError("CUT3R requires 'instance' as image path for each view")
+                                img_paths.append(impath)
+
+                            # Prepare CUT3R views (strictly following demo.py)
+                            images = cut3r_ctx["load_images"](img_paths, size=args.size)
+                            cut3r_views = []
+                            for i in range(len(images)):
+                                img = images[i]["img"]
+                                true_shape = torch.from_numpy(images[i]["true_shape"]).to(img.device)
+                                cut3r_views.append(
+                                    {
+                                        "img": img,
+                                        "ray_map": torch.full(
+                                            (
+                                                img.shape[0],
+                                                6,
+                                                img.shape[-2],
+                                                img.shape[-1],
+                                            ),
+                                            torch.nan,
+                                            device=img.device,
+                                        ),
+                                        "true_shape": true_shape,
+                                        "idx": i,
+                                        "instance": str(i),
+                                        "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device),
+                                        "img_mask": torch.tensor(True, device=img.device).unsqueeze(0),
+                                        "ray_mask": torch.tensor(False, device=img.device).unsqueeze(0),
+                                        "update": torch.tensor(True, device=img.device).unsqueeze(0),
+                                        "reset": torch.tensor(False, device=img.device).unsqueeze(0),
+                                    }
                                 )
+
+                            torch.cuda.synchronize()
+                            start = time.time()
+                            outputs, state_args = cut3r_ctx["inference"](cut3r_views, model, args.device.split(":")[0])
+                            torch.cuda.synchronize()
+                            end = time.time()
+                            elapsed_s = end - start
+                            frame_count = len(cut3r_views)
+                            fps = frame_count / elapsed_s if elapsed_s > 0 else float("inf")
+                            print(f"Inference FPS (frames/s): {fps:.2f}")
+
+                            # Adapt outputs to current eval preds format
+                            preds = []
+                            # Only keep one full pass (mirror demo.py)
+                            valid_length = len(outputs["pred"]) // args.revisit
+                            pred_slice = outputs["pred"][-valid_length:]
+                            for s, pred in enumerate(pred_slice):
+                                pts = pred.get("pts3d_in_other_view", None)
+                                conf = pred.get("conf", None)
+                                if pts is None:
+                                    raise KeyError("CUT3R outputs missing 'pts3d_in_other_view'")
+                                    
+                                res = {
+                                    "pts3d_in_other_view": pts,
+                                    "conf": conf if conf is not None else torch.ones_like(pts[..., 0]),
+                                }
+                                # Bring over valid_mask if present in original batch view
+                                if isinstance(views, list) and s < len(views) and "valid_mask" in views[s]:
+                                    res["valid_mask"] = views[s]["valid_mask"]
+                                preds.append(res)
+                        else:
+                            fast3r_views = []
+                            for v in views:
+                                img_batched = v["img"]
+                                true_shape_batched = v.get("true_shape")
+                                idx_val = v.get("idx", 0)
+                                if torch.is_tensor(idx_val):
+                                    idx_val = int(idx_val.item())
+                                else:
+                                    idx_val = int(idx_val)
+                                fast3r_views.append(
+                                    dict(
+                                        img=img_batched,
+                                        true_shape=true_shape_batched,
+                                        idx=idx_val,
+                                        instance=str(v.get("instance", "")),
+                                    )
+                                )
+
+                            torch.cuda.synchronize()
+                            start = time.time()
+                            output_dict, profiling_info = fast3r_inference(
+                                fast3r_views,
+                                model,
+                                device_obj,
+                                dtype=torch.bfloat16,
+                                verbose=False,
+                                profiling=True,
                             )
+                            torch.cuda.synchronize()
+                            end = time.time()
+                            total_time = (
+                                profiling_info.get("total_time", None)
+                                if isinstance(profiling_info, dict)
+                                else None
+                            )
+                            elapsed_s = total_time if (total_time and total_time > 0) else (end - start)
+                            frame_count = len(fast3r_views)
+                            fps = frame_count / elapsed_s if elapsed_s > 0 else float("inf")
+                            print(f"Inference FPS (frames/s): {fps:.2f}")
 
-                        torch.cuda.synchronize()
-                        start = time.time()
-                        output_dict, profiling_info = fast3r_inference(
-                            fast3r_views,
-                            model,
-                            device_obj,
-                            dtype=torch.bfloat16,
-                            verbose=False,
-                            profiling=True,
-                        )
-                        torch.cuda.synchronize()
-                        end = time.time()
-                        total_time = (
-                            profiling_info.get("total_time", None)
-                            if isinstance(profiling_info, dict)
-                            else None
-                        )
-                        elapsed_s = total_time if (total_time and total_time > 0) else (end - start)
-                        frame_count = len(fast3r_views)
-                        fps = frame_count / elapsed_s if elapsed_s > 0 else float("inf")
-                        print(f"Inference FPS (frames/s): {fps:.2f}")
-
-                        preds_raw = output_dict["preds"]
-                        ress = []
+                            preds_raw = output_dict["preds"]
+                            ress = []
                         for s, pred in enumerate(preds_raw):
                             pts = pred["pts3d_in_other_view"]
                             conf = pred.get("conf", None)
