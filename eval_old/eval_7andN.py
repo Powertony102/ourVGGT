@@ -115,7 +115,7 @@ def main(args):
     from criterion import Regr3D_t_ScaleShiftInv, L21
 
     dtype = torch.bfloat16
-    if model_name.upper() == "VGGT":
+    if model_name.upper() == "VGGT":Input type (float) and bias type (c10::BFloat16) should be the same
         model = VGGT(merging=args.merging, enable_point=True)
         ckpt = torch.load(args.ckpt_path, map_location="cpu")
         model.load_state_dict(ckpt, strict=False)
@@ -312,7 +312,7 @@ def main(args):
                                 images = cut3r_ctx["load_images"](img_paths, size=args.size)
                                 cut3r_views = []
                                 for i in range(len(images)):
-                                    img = images[i]["img"]
+                                    img = images[i]["img"].to(torch.bfloat16)
                                     true_shape = torch.from_numpy(images[i]["true_shape"]).to(img.device)
                                     cut3r_views.append(
                                         {
@@ -340,7 +340,7 @@ def main(args):
                             else:
                                 cut3r_views = []
                                 for i, v in enumerate(views):
-                                    img = v["img"]
+                                    img = v["img"].to(torch.bfloat16)
                                     true_shape = torch.tensor([img.shape[-2], img.shape[-1]], dtype=torch.int32, device=img.device)
                                     cut3r_views.append(
                                         {
@@ -398,7 +398,7 @@ def main(args):
                         else:
                             fast3r_views = []
                             for v in views:
-                                img_batched = v["img"]
+                                img_batched = v["img"].to(torch.bfloat16)
                                 true_shape_batched = v.get("true_shape")
                                 idx_val = v.get("idx", 0)
                                 if torch.is_tensor(idx_val):
