@@ -486,7 +486,21 @@ def main(args):
                             ress.append(res)
                         preds = ress
                     except Exception as e:
+                        import traceback
                         print(f"{model_name} inference failed: {e}")
+                        try:
+                            print(f"Model class: {model.__class__.__name__}")
+                            p = next(model.parameters())
+                            print(f"Model param dtype: {p.dtype}")
+                        except Exception:
+                            pass
+                        try:
+                            dv = cut3r_views[0]
+                            dbg = {k: (dv[k].dtype if torch.is_tensor(dv[k]) else type(dv[k])) for k in dv.keys()}
+                            print(f"First CUT3R view dtypes: {dbg}")
+                        except Exception:
+                            pass
+                        traceback.print_exc()
                         continue
 
                     valid_length = len(preds) // args.revisit
