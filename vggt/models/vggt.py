@@ -32,12 +32,20 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         merging=0,
         vis_attn_map=False,
         similarity_temperature: float = 1.0,
+        partition_lam: float = 0.5,
+        partition_alpha: float = 1.0,
+        partition_beta: float = 1.0,
+        partition_num_groups: int | None = None,
     ):
         super().__init__()
 
         self.vis_attn_map = vis_attn_map
         # Temperature for sharpening similarity (smaller -> sharper). 1.0 means no change.
         self.similarity_temperature = float(similarity_temperature)
+        self.partition_lam = float(partition_lam)
+        self.partition_alpha = float(partition_alpha)
+        self.partition_beta = float(partition_beta)
+        self.partition_num_groups = partition_num_groups if partition_num_groups is None else int(partition_num_groups)
 
         self.aggregator = Aggregator(
             img_size=img_size,
@@ -139,9 +147,10 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         if query_points is not None and len(query_points.shape) == 2:
             query_points = query_points.unsqueeze(0)
 
-        num_groups = 10
+        if num_groups is None:
+            num_groups = self.partition_num_groups
         # If we are not doing subscene grouping, run the original path
-        if num_groups is None or images.shape[1] <= 1:
+        if images.shape[1] <= 1:
             # Lightweight timing helpers (local scope)
             def _timer_start_n():
                 if not TIMING_ENABLED:
@@ -329,7 +338,8 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         Nx = similarity.shape[1]
         k_auto = int(torch.floor(avg_neighbors_per_frame).item())
         k_auto = max(1, min(k_auto, Nx))
-        num_groups = min(5, k_auto)
+        if num_groups is None:
+            num_groups = min(5, k_auto)
         print(f"[Partitions] Auto num_groups from similarity: {num_groups}")
 
 
@@ -341,9 +351,9 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
                 num_groups=num_groups,
                 steps=2000,
                 lr=1e-1,
-                lam=0.5,
-                alpha=1.0,
-                beta=1.0,
+                lam=self.partition_lam,
+                alpha=self.partition_alpha,
+                beta=self.partition_beta,
                 patience=10,
                 log_interval=50,
             )
