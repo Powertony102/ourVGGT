@@ -362,15 +362,16 @@ class Aggregator(nn.Module):
                         )
                     )
                 elif attn_type == "global":
-                    if self.merging is None:
-                        global_merging = None
-                    elif self.global_merging and block_num >= self.merging:
-                        global_merging = block_num
-                        # Set attention_map for visualization
+                    gm = None
+                    if (
+                        self.global_merging
+                        and self.merging is not None
+                        and block_num >= self.merging
+                    ):
+                        gm = block_num
                         if self.vis_attn_map:
                             import vggt.layers.attention as attn_module
                             attn_module.attention_map = block_num
-                    global_merging = None
                     tokens, global_idx, global_intermediates = (
                         self._process_global_attention(
                             tokens,
@@ -380,7 +381,7 @@ class Aggregator(nn.Module):
                             C,
                             global_idx,
                             pos=pos,
-                            global_merging=global_merging,
+                            global_merging=gm,
                             need_intermediates=need_intermediates,
                         )
                     )

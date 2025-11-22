@@ -207,11 +207,18 @@ class Attention(nn.Module):
         #         )
         #         plt.close()
 
-        if global_merging is not None and global_merging in merge_num:
+        merge_cfg = None
+        if isinstance(global_merging, dict):
+            merge_cfg = global_merging
+        if (isinstance(global_merging, int) and global_merging in merge_num) or (
+            isinstance(merge_cfg, dict) and merge_cfg.get("block") in merge_num
+        ):
             generator = torch.Generator(device=x.device)
             generator.manual_seed(33)
 
-            merge_ratio = 0.9
+            merge_ratio = (
+                merge_cfg.get("ratio", 0.9) if isinstance(merge_cfg, dict) else 0.9
+            )
             r = int(x.shape[1] * merge_ratio)
 
             m, u = token_merge_bipartite2d(
@@ -261,7 +268,9 @@ class Attention(nn.Module):
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        if global_merging is not None and global_merging in merge_num:
+        if (isinstance(global_merging, int) and global_merging in merge_num) or (
+            isinstance(merge_cfg, dict) and merge_cfg.get("block") in merge_num
+        ):
             x = u_a(x)
         return x
 
