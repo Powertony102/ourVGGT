@@ -136,21 +136,22 @@ if __name__ == "__main__":
             for v_idx, v in enumerate(cut3r_views):
                 try:
                     B, C, H, W = v["img"].shape
-                    if "img_mask" not in v:
-                        v["img_mask"] = torch.ones((B,), dtype=torch.bool)
-                    if "ray_mask" not in v:
-                        v["ray_mask"] = torch.ones((B,), dtype=torch.bool)
-                    if "reset" not in v:
-                        v["reset"] = torch.zeros((B,), dtype=torch.bool)
+                    if isinstance(v.get("true_shape", None), np.ndarray):
+                        v["true_shape"] = torch.from_numpy(v["true_shape"])  
                     if "ray_map" not in v:
-                        # shape: (B, H, W, 6)
-                        v["ray_map"] = torch.zeros((B, H, W, 6), dtype=v["img"].dtype)
-                    # move tensors to device
+                        v["ray_map"] = torch.full((B, 6, H, W), torch.nan, dtype=v["img"].dtype)
+                    v["img_mask"] = torch.tensor(True).unsqueeze(0)
+                    v["ray_mask"] = torch.tensor(False).unsqueeze(0)
+                    v["reset"] = torch.tensor(False).unsqueeze(0)
+                    v["update"] = torch.tensor(True).unsqueeze(0)
+                    v["camera_pose"] = torch.from_numpy(np.eye(4).astype(np.float32)).unsqueeze(0)
+                    v["idx"] = v_idx
+                    v["instance"] = str(v_idx)
                     for k, val in list(v.items()):
                         if torch.is_tensor(val):
                             v[k] = val.to(device, non_blocking=True)
                 except Exception as e:
-                    raise RuntimeError(f"Invalid view data at index {v_idx}: {e}. Required keys: img, img_mask, ray_mask, ray_map, reset")
+                    raise RuntimeError(f"Invalid view data at index {v_idx}: {e}.")
             start = time.time()
             output, _ = loss_of_one_batch(
                 cut3r_views,
