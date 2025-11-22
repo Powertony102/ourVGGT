@@ -62,18 +62,6 @@ class Attention(nn.Module):
         merge_num = list(range(24))
 
         B, N, C = x.shape
-        qkv = (
-            self.qkv(x)
-            .reshape(B, N, 3, self.num_heads, self.head_dim)
-            .permute(2, 0, 3, 1, 4)
-        )
-        q, k, v = qkv.unbind(0)
-        del qkv
-        q, k = self.q_norm(q), self.k_norm(k)
-
-        if self.rope is not None:
-            q = self.rope(q, pos)
-            k = self.rope(k, pos)
 
         if vis_attn_map and global_merging is not None:
             # s1 Chunk computation of q@k
@@ -165,7 +153,67 @@ class Attention(nn.Module):
                     plt.close()
             del attn_maps, attn_map, attn
 
-        B_q, H_q, N_q, D_q = q.shape
+        # 默认路径：不触发合并时，直接计算 qkv
+        merge_cfg = None
+        if isinstance(global_merging, dict):
+            merge_cfg = global_merging
+        trigger_merge = (isinstance(global_merging, int) and global_merging in merge_num) or (
+            isinstance(merge_cfg, dict) and merge_cfg.get("block") in merge_num
+        )
+
+        if not trigger_merge:
+            qkv = (
+                self.qkv(x)
+                .reshape(B, N, 3, self.num_heads, self.head_dim)
+                .permute(2, 0, 3, 1, 4)
+            )
+            q, k, v = qkv.unbind(0)
+            del qkv
+            q, k = self.q_norm(q), self.k_norm(k)
+            if self.rope is not None:
+                q = self.rope(q, pos)
+                k = self.rope(k, pos)
+            B_q, H_q, N_q, D_q = q.shape
+        else:
+            generator = torch.Generator(device=x.device)
+            generator.manual_seed(33)
+            merge_ratio = (
+                merge_cfg.get("ratio", 0.9) if isinstance(merge_cfg, dict) else 0.9
+            )
+            r = int(x.shape[1] * merge_ratio)
+
+            m, u = token_merge_bipartite2d(
+                x,
+                self.patch_width,
+                self.patch_height,
+                2,
+                2,
+                r,
+                False,
+                generator,
+                enable_protection=True,
+            )
+            # 先合并 x 以降低 qkv 的计算规模
+            x_m = m(x, mode="mean")
+            N_m = x_m.shape[1]
+            # 构建与合并后序列对应的位置编码（不聚合，仅选择）
+            pos_m = m.build_pos(pos) if pos is not None else None
+
+            qkv = (
+                self.qkv(x_m)
+                .reshape(B, N_m, 3, self.num_heads, self.head_dim)
+                .permute(2, 0, 3, 1, 4)
+            )
+            q, k, v = qkv.unbind(0)
+            del qkv
+            q, k = self.q_norm(q), self.k_norm(k)
+            if self.rope is not None and pos_m is not None:
+                q = self.rope(q, pos_m)
+                k = self.rope(k, pos_m)
+            B_q, H_q, N_q, D_q = q.shape
+            # 用于恢复原长度
+            u_a = u
+            del x_m, pos_m
 
         # frame_token_num = self.patch_height * self.patch_width + 5
         # if N_q % frame_token_num != 0:
@@ -210,55 +258,9 @@ class Attention(nn.Module):
         #         )
         #         plt.close()
 
-        merge_cfg = None
-        if isinstance(global_merging, dict):
-            merge_cfg = global_merging
-        if (isinstance(global_merging, int) and global_merging in merge_num) or (
-            isinstance(merge_cfg, dict) and merge_cfg.get("block") in merge_num
-        ):
-            generator = torch.Generator(device=x.device)
-            generator.manual_seed(33)
-
-            merge_ratio = (
-                merge_cfg.get("ratio", 0.9) if isinstance(merge_cfg, dict) else 0.9
-            )
-            r = int(x.shape[1] * merge_ratio)
-
-            m, u = token_merge_bipartite2d(
-                x,
-                self.patch_width,
-                self.patch_height,
-                2,
-                2,
-                r,
-                False,
-                generator,
-                enable_protection=True,
-            )
-
-            m_a, u_a = (m, u)
-
-            q_merge_in = q.permute(0, 2, 1, 3).reshape(B_q, N_q, H_q * D_q)
-            k_merge_in = k.permute(0, 2, 1, 3).reshape(B_q, N_q, H_q * D_q)
-            v_merge_in = v.permute(0, 2, 1, 3).reshape(B_q, N_q, H_q * D_q)
-
-            q_out, k_out, v_out = m_a(
-                q_merge_in,
-                mode="mean",
-                extra_tensors=k_merge_in,
-                extra_tensors_2=v_merge_in,
-            )
-
-            del q_merge_in, k_merge_in, v_merge_in
-
-            N_m = q_out.shape[1]
-            q = q_out.reshape(B_q, N_m, H_q, D_q).permute(0, 2, 1, 3)
-            k = k_out.reshape(B_q, N_m, H_q, D_q).permute(0, 2, 1, 3)
-            v = v_out.reshape(B_q, N_m, H_q, D_q).permute(0, 2, 1, 3)
-
-            del q_out, k_out, v_out
-
-            N = N_m
+        # 若进行了预合并，则 N 需更新
+        if trigger_merge:
+            N = N_q
 
         x = F.scaled_dot_product_attention(
             q,
@@ -271,11 +273,9 @@ class Attention(nn.Module):
         x = x.transpose(1, 2).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
-        if (isinstance(global_merging, int) and global_merging in merge_num) or (
-            isinstance(merge_cfg, dict) and merge_cfg.get("block") in merge_num
-        ):
+        if trigger_merge:
             x = u_a(x)
-            del u_a, m_a
+            del u_a
         return x
 
 

@@ -17,14 +17,35 @@ def fast_similarity_chunks(
     node_idx = torch.empty(B, num_src, device=a.device, dtype=torch.long)
 
     # Process in chunks
-    for i in range(0, num_src, chunk_size):
-        end_i = min(i + chunk_size, num_src)
-        a_chunk = a_bf16[:, i:end_i, :]  # [B, chunk_size, C]
-        scores_chunk = torch.bmm(a_chunk, b_transposed_bf16)
-        chunk_max_bf16, chunk_idx = torch.max(scores_chunk, dim=2)
-        chunk_max = chunk_max_bf16.to(original_dtype)
-        node_max[:, i:end_i] = chunk_max
-        node_idx[:, i:end_i] = chunk_idx
+    # also chunk over destination dimension to cap intermediate tensor sizes
+    num_dst = b_transposed_bf16.shape[-1]
+    chunk_size_src = min(chunk_size, num_src)
+    chunk_size_dst = max(1024, min(4096, num_dst))
+
+    for i in range(0, num_src, chunk_size_src):
+        end_i = min(i + chunk_size_src, num_src)
+        a_chunk = a_bf16[:, i:end_i, :]  # [B, len_src, C]
+        # initialize per-chunk maxima
+        chunk_max = torch.full((B, end_i - i), -float("inf"), device=a.device, dtype=torch.float32)
+        chunk_arg = torch.zeros(B, end_i - i, device=a.device, dtype=torch.long)
+        for j in range(0, num_dst, chunk_size_dst):
+            end_j = min(j + chunk_size_dst, num_dst)
+            b_chunk = b_transposed_bf16[:, :, j:end_j]  # [B, C, len_dst]
+            scores = torch.bmm(a_chunk, b_chunk)  # [B, len_src, len_dst]
+            # get max within current dst chunk
+            max_j, idx_j = torch.max(scores, dim=2)
+            # compare and update global max over dst
+            better = max_j > chunk_max
+            # promote dtype for addition safety
+            chunk_max = torch.where(better, max_j, chunk_max)
+            idx_updated = torch.where(better, idx_j + j, chunk_arg)
+            chunk_arg = idx_updated
+            # free inner tensors asap
+            del b_chunk, scores, max_j, idx_j, better
+        # cast maxima back to original dtype
+        node_max[:, i:end_i] = chunk_max.to(original_dtype)
+        node_idx[:, i:end_i] = chunk_arg
+        del a_chunk, chunk_max, chunk_arg
     return node_max, node_idx
 
 
@@ -55,7 +76,7 @@ def token_merge_bipartite2d(
     no_rand: bool = False,
     generator: Optional[torch.Generator] = None,
     enable_protection: bool = False,
-) -> Tuple[Callable, Callable]:
+    ) -> Tuple[Callable, Callable]:
     """
     Divide tokens into source (src) and destination (dst) groups, and merge r tokens from src to dst.
     dst tokens are selected by randomly choosing one token from each (sx, sy) region.
@@ -442,6 +463,30 @@ def token_merge_bipartite2d(
             )
 
         return out
+
+    # 额外工具：根据当前分割索引，为位置编码 pos 构建与合并后序列对应的 pos_m（不做聚合，仅选择）
+    def build_pos(pos: torch.Tensor) -> torch.Tensor:
+        # pos: (B, N, Dpos) 通常 Dpos=2，dtype=long
+        Dpos = pos.shape[-1]
+        if enable_protection:
+            src_p, dst_p, prot_p = split(pos)
+        else:
+            src_p, dst_p = split(pos)
+            prot_p = None
+
+        # 未合并的 src 的位置：按 unm_idx 选取
+        n = src_p.shape[0]
+        unm_len = unm_idx.shape[1]
+        pos_unm = gather(src_p, dim=-2, index=unm_idx.expand(n, unm_len, Dpos))
+
+        if enable_protection:
+            pos_m = torch.cat([pos_unm, dst_p, prot_p], dim=1)
+        else:
+            pos_m = torch.cat([pos_unm, dst_p], dim=1)
+        return pos_m
+
+    # 将工具函数附加到 merge 闭包，供调用方构造合并后位置编码
+    merge.build_pos = build_pos  # type: ignore[attr-defined]
 
     # 返回两个闭包，供 Attention 在合并前后调用
     return merge, unmerge
