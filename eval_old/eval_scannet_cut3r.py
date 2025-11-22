@@ -147,6 +147,13 @@ if __name__ == "__main__":
                     v["camera_pose"] = torch.from_numpy(np.eye(4).astype(np.float32)).unsqueeze(0)
                     v["idx"] = v_idx
                     v["instance"] = str(v_idx)
+                    # 关键张量迁移到 GPU，避免与模型权重设备不一致
+                    v["img"] = v["img"].to(device, non_blocking=True)
+                    v["img_mask"] = v["img_mask"].to(device, non_blocking=True)
+                    v["ray_mask"] = v["ray_mask"].to(device, non_blocking=True)
+                    v["reset"] = v["reset"].to(device, non_blocking=True)
+                    v["update"] = v["update"].to(device, non_blocking=True)
+                    v["camera_pose"] = v["camera_pose"].to(device, non_blocking=True)
                 except Exception as e:
                     raise RuntimeError(f"Invalid view data at index {v_idx}: {e}.")
             start = time.time()
