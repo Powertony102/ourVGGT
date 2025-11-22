@@ -421,11 +421,11 @@ def token_merge_bipartite2d(
 
         # 4) 若启用保护，将 protected 片段 scatter 回 protected_idx 对应位置
         if enable_protection:
-        out.scatter_(
-            dim=-2,
-            index=protected_idx.expand(B, num_protected_actual, c),
-            src=protected,
-        )
+            out.scatter_(
+                dim=-2,
+                index=protected_idx.expand(B, num_protected_actual, c),
+                src=protected,
+            )
 
         return out
 
