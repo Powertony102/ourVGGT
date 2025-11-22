@@ -44,6 +44,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
             patch_size=patch_size,
             embed_dim=embed_dim,
             merging=merging,
+            global_merging=(merging is not None),
             vis_attn_map=vis_attn_map,
         )
 
