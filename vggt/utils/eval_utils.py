@@ -691,15 +691,8 @@ def evaluate_scene_and_save(
     traj_est_poses = np.array(all_cam_to_world_mat)
     n = min(len(traj_est_poses), len(w2cs))
     timestamps = frame_ids[:n]
-    stats_aligned, traj_plot, transform = eval_trajectory(
-        traj_est_poses[:n], w2cs[:n], timestamps, align=True
-    )
-    transform_no_scale = np.eye(4)
-    transform_no_scale[:3, :3] = transform[:3, :3]
-    transform_no_scale[:3, 3] = transform[:3, 3]
-    traj_est_poses_oriented = np.matmul(traj_est_poses[:n], np.linalg.inv(transform_no_scale))
     stats_aligned, traj_plot, _ = eval_trajectory(
-        traj_est_poses_oriented, w2cs[:n], timestamps, align=True
+        traj_est_poses[:n], w2cs[:n], timestamps, align=True
     )
 
     try:
