@@ -150,8 +150,18 @@ if __name__ == "__main__":
             all_w2c = [np.linalg.inv(c2w_mat) for c2w_mat in all_c2w]
             all_world_points = []
             for view_idx, pred in enumerate(output_dict['preds']):
-                pts = pred['pts3d_in_other_view']
-                pts_np = pts.to(torch.float32).cpu().numpy()[0]
+                pts_any = pred['pts3d_in_other_view']
+                if isinstance(pts_any, list):
+                    pts_tensor = pts_any[0]
+                else:
+                    pts_tensor = pts_any
+                if isinstance(pts_tensor, torch.Tensor):
+                    if pts_tensor.dim() == 4:
+                        pts_np = pts_tensor[0].to(torch.float32).cpu().numpy()
+                    else:
+                        pts_np = pts_tensor.to(torch.float32).cpu().numpy()
+                else:
+                    pts_np = np.asarray(pts_tensor)
                 pts_np = pts_np.reshape(-1, 3)
                 c2w = camera_poses[view_idx]
                 R = c2w[:3, :3]
