@@ -84,7 +84,7 @@ if __name__ == "__main__":
     all_scenes_metrics = {"scenes": {}, "average": {}}
     from collections import defaultdict
     scene_infer_times = defaultdict(list)
-    dtype = torch.bfloat16
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device = torch.device(args.device)
     if os.path.exists(args.cut3r_ckpt):
         add_path_to_dust3r(args.cut3r_ckpt)
@@ -92,7 +92,7 @@ if __name__ == "__main__":
         model = ARCroco3DStereo.from_pretrained(args.cut3r_ckpt)
     except Exception:
         raise
-    model = model.to(device).to(torch.bfloat16).eval()
+    model = model.to(device).eval()
     accelerator = Accelerator()
 
     for scene in scannet_scenes:
@@ -147,9 +147,6 @@ if __name__ == "__main__":
                     v["camera_pose"] = torch.from_numpy(np.eye(4).astype(np.float32)).unsqueeze(0)
                     v["idx"] = v_idx
                     v["instance"] = str(v_idx)
-                    for k, val in list(v.items()):
-                        if torch.is_tensor(val):
-                            v[k] = val.to(device, non_blocking=True)
                 except Exception as e:
                     raise RuntimeError(f"Invalid view data at index {v_idx}: {e}.")
             start = time.time()
