@@ -350,7 +350,7 @@ def main():
     # model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
     
     model = VGGT()
-    checkpoint = torch.load("/home/wentaocheng/Documents/model_zoo/model_tracker_fixed_e20.pt", map_location="cuda")
+    checkpoint = torch.load("/home/jovyan/work/furina/ourVGGT/ckpt/model_tracker_fixed_e20.pt", map_location="cuda")
     missing, unexpected = model.load_state_dict(checkpoint, strict=False)
     if missing or unexpected:
         print(f"Warning: Missing keys: {missing}")
