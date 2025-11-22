@@ -145,7 +145,8 @@ if __name__ == "__main__":
                 focal_length_estimation_method='first_view_from_global_head'
             )
             camera_poses = poses_c2w_batch[0]
-            all_cam_to_world_mat = [camera_poses[i] for i in range(len(camera_poses))]
+            all_c2w = [camera_poses[i] for i in range(len(camera_poses))]
+            all_w2c = [np.linalg.inv(c2w_mat) for c2w_mat in all_c2w]
             all_world_points = []
             for view_idx, pred in enumerate(output_dict['preds']):
                 pts = pred['pts3d_in_other_view']
@@ -173,7 +174,7 @@ if __name__ == "__main__":
                 merged_points = merged_points[sample_indices]
             all_world_points = [merged_points]
 
-            if not all_cam_to_world_mat or not all_world_points:
+            if not all_w2c or not all_world_points:
                 print(f"Skipping {scene}: failed to obtain valid camera poses or point clouds")
                 continue
 
@@ -183,7 +184,7 @@ if __name__ == "__main__":
                 c2ws,
                 first_gt_pose,
                 frame_ids,
-                all_cam_to_world_mat,
+                all_w2c,
                 all_world_points,
                 output_scene_dir,
                 args.gt_ply_dir,
