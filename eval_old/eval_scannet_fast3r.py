@@ -139,6 +139,7 @@ if __name__ == "__main__":
                 verbose=False,
                 profiling=True,
             )
+            MultiViewDUSt3RLitModule.correct_preds_orientation(output_dict['preds'], fast3r_views)
             poses_c2w_batch, estimated_focals = MultiViewDUSt3RLitModule.estimate_camera_poses(
                 output_dict['preds'],
                 niter_PnP=100,
