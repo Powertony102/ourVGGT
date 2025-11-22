@@ -68,6 +68,7 @@ class Attention(nn.Module):
             .permute(2, 0, 3, 1, 4)
         )
         q, k, v = qkv.unbind(0)
+        del qkv
         q, k = self.q_norm(q), self.k_norm(k)
 
         if self.rope is not None:
@@ -274,6 +275,7 @@ class Attention(nn.Module):
             isinstance(merge_cfg, dict) and merge_cfg.get("block") in merge_num
         ):
             x = u_a(x)
+            del u_a, m_a
         return x
 
 

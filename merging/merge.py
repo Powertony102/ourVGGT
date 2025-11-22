@@ -123,6 +123,7 @@ def token_merge_bipartite2d(
             )
             cls_indices = cls_indices[:, None] + torch.arange(5, device=metric.device)
             idx_buffer_seq[cls_indices.flatten()] = -1
+            del cls_indices
             # 有效网格尺寸（避免越界）：当 h 或 w 不能被 sy/sx 完整整除时，按可覆盖区域截断
             effective_h = min(hsy * sy, h)
             effective_w = min(wsx * sx, w)
@@ -145,6 +146,7 @@ def token_merge_bipartite2d(
                 idx_buffer_seq[grid_indices.flatten()] = base_pattern.repeat(
                     num_imgs - 1
                 )
+                del base_pattern, grid_starts, grid_indices
             else:
                 # 随机：在每个 (sy, sx) 子网格里随机选一个索引作为 dst
                 total_other_imgs = num_imgs - 1
@@ -206,6 +208,9 @@ def token_merge_bipartite2d(
         a_idx = a_idx_orig
         b_idx = b_idx_orig
         del rand_idx, idx_buffer_seq
+        if enable_protection:
+            # protected_indices 不再需要，保留 protected_idx 即可
+            del protected_indices
 
         # 若启用保护，构造受保护索引的形状以适配 gather（[1, P, 1]）
         if enable_protection:
@@ -287,6 +292,15 @@ def token_merge_bipartite2d(
         # 用 r_actual 回写 r，便于后续一致性（extra_tensors 同步）
         r = r_actual
         del node_idx
+        # 大型中间张量及时释放
+        if enable_protection:
+            del protected
+        del a, b, metric
+        try:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
 
     # 定义合并函数：把选中的 src 汇聚到对应的 dst（默认 reduce=mean），并返回拼接结果
     def merge(
