@@ -17,35 +17,25 @@ def fast_similarity_chunks(
     node_idx = torch.empty(B, num_src, device=a.device, dtype=torch.long)
 
     # Process in chunks
-    # also chunk over destination dimension to cap intermediate tensor sizes
     num_dst = b_transposed_bf16.shape[-1]
     chunk_size_src = min(chunk_size, num_src)
     chunk_size_dst = max(1024, min(4096, num_dst))
 
     for i in range(0, num_src, chunk_size_src):
         end_i = min(i + chunk_size_src, num_src)
-        a_chunk = a_bf16[:, i:end_i, :]  # [B, len_src, C]
-        # initialize per-chunk maxima
-        chunk_max = torch.full((B, end_i - i), -float("inf"), device=a.device, dtype=torch.float32)
+        a_chunk = a_bf16[:, i:end_i, :]
+        chunk_max = torch.full((B, end_i - i), -1e9, device=a.device, dtype=a_bf16.dtype)
         chunk_arg = torch.zeros(B, end_i - i, device=a.device, dtype=torch.long)
         for j in range(0, num_dst, chunk_size_dst):
             end_j = min(j + chunk_size_dst, num_dst)
-            b_chunk = b_transposed_bf16[:, :, j:end_j]  # [B, C, len_dst]
-            scores = torch.bmm(a_chunk, b_chunk)  # [B, len_src, len_dst]
-            # get max within current dst chunk
+            b_chunk = b_transposed_bf16[:, :, j:end_j]
+            scores = torch.bmm(a_chunk, b_chunk)
             max_j, idx_j = torch.max(scores, dim=2)
-            # compare and update global max over dst
             better = max_j > chunk_max
-            # promote dtype for addition safety
             chunk_max = torch.where(better, max_j, chunk_max)
-            idx_updated = torch.where(better, idx_j + j, chunk_arg)
-            chunk_arg = idx_updated
-            # free inner tensors asap
-            del b_chunk, scores, max_j, idx_j, better
-        # cast maxima back to original dtype
+            chunk_arg = torch.where(better, idx_j + j, chunk_arg)
         node_max[:, i:end_i] = chunk_max.to(original_dtype)
         node_idx[:, i:end_i] = chunk_arg
-        del a_chunk, chunk_max, chunk_arg
     return node_max, node_idx
 
 
