@@ -99,6 +99,7 @@ class Attention(nn.Module):
                     print(
                         f"Chunk {start}:{end} processed in {end_time_chunk - start_time_chunk:.4f} seconds"
                     )
+                    del q_chunk, attn_chunk
             end_time_total = time.time()
             print(
                 f"\nTotal processing time: {end_time_total - start_time_total:.4f} seconds"
@@ -161,6 +162,7 @@ class Attention(nn.Module):
                     output_path = os.path.join(output_dir, f"color_{image_idx}.png")
                     plt.savefig(output_path)
                     plt.close()
+            del attn_maps, attn_map, attn
 
         B_q, H_q, N_q, D_q = q.shape
 

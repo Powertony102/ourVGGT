@@ -194,6 +194,7 @@ def token_merge_bipartite2d(
                     idx_buffer_seq[grid_start : grid_start + effective_grid_size] = (
                         flat_view
                     )
+                del idx_buffer_batch, all_rand_idx, scatter_src
 
         # 通过 argsort 将 -1（dst）排在前面，0（src）排在后面，得到两侧的索引集合
         rand_idx = idx_buffer_seq.reshape(1, -1, 1).argsort(dim=1)
@@ -204,6 +205,7 @@ def token_merge_bipartite2d(
         b_idx_orig = rand_idx[:, :num_dst_orig, :]
         a_idx = a_idx_orig
         b_idx = b_idx_orig
+        del rand_idx, idx_buffer_seq
 
         # 若启用保护，构造受保护索引的形状以适配 gather（[1, P, 1]）
         if enable_protection:
@@ -256,6 +258,7 @@ def token_merge_bipartite2d(
         node_max, node_idx = fast_similarity_chunks(a, b_transposed, chunk_size)
         # 按最大相似度由大到小排序，得到 src 的优先级队列（edge_idx）
         edge_idx = node_max.argsort(dim=-1, descending=True)[..., None]
+        del node_max, b_transposed
 
         # 若启用保护：过滤掉属于保护集合的 src，保证这些 token 不被合并
         if enable_protection:
@@ -277,11 +280,13 @@ def token_merge_bipartite2d(
             unm_idx = edge_idx[..., r:, :]
             src_idx = edge_idx[..., :r, :]
             r_actual = r
+        del edge_idx
 
         # 为每个待合并的 src 查出它指向的 argmax dst 索引
         dst_idx = gather(node_idx[..., None], dim=-2, index=src_idx)
         # 用 r_actual 回写 r，便于后续一致性（extra_tensors 同步）
         r = r_actual
+        del node_idx
 
     # 定义合并函数：把选中的 src 汇聚到对应的 dst（默认 reduce=mean），并返回拼接结果
     def merge(
@@ -416,11 +421,11 @@ def token_merge_bipartite2d(
 
         # 4) 若启用保护，将 protected 片段 scatter 回 protected_idx 对应位置
         if enable_protection:
-            out.scatter_(
-                dim=-2,
-                index=protected_idx.expand(B, num_protected_actual, c),
-                src=protected,
-            )
+        out.scatter_(
+            dim=-2,
+            index=protected_idx.expand(B, num_protected_actual, c),
+            src=protected,
+        )
 
         return out
 
