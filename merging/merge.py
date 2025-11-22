@@ -208,9 +208,6 @@ def token_merge_bipartite2d(
         a_idx = a_idx_orig
         b_idx = b_idx_orig
         del rand_idx, idx_buffer_seq
-        if enable_protection:
-            # protected_indices 不再需要，保留 protected_idx 即可
-            del protected_indices
 
         # 若启用保护，构造受保护索引的形状以适配 gather（[1, P, 1]）
         if enable_protection:
@@ -286,6 +283,9 @@ def token_merge_bipartite2d(
             src_idx = edge_idx[..., :r, :]
             r_actual = r
         del edge_idx
+        if enable_protection:
+            # 保护集合索引不再需要
+            del protected_indices
 
         # 为每个待合并的 src 查出它指向的 argmax dst 索引
         dst_idx = gather(node_idx[..., None], dim=-2, index=src_idx)
