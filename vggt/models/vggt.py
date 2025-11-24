@@ -140,7 +140,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         if query_points is not None and len(query_points.shape) == 2:
             query_points = query_points.unsqueeze(0)
 
-        num_groups = 10
         # If we are not doing subscene grouping, run the original path
         if num_groups is None or images.shape[1] <= 1:
             # Lightweight timing helpers (local scope)
@@ -326,12 +325,16 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         except Exception:
             pass
 
-        # Use floored average as base groups, then cap to min(10, k_auto)
+        # Decide number of groups: use caller override if provided, else auto from similarity
         Nx = similarity.shape[1]
         k_auto = int(torch.floor(avg_neighbors_per_frame).item())
         k_auto = max(1, min(k_auto, Nx))
-        num_groups = min(5, k_auto)
-        print(f"[Partitions] Auto num_groups from similarity: {num_groups}")
+        if num_groups is None:
+            num_groups_eff = min(5, k_auto)
+            print(f"[Partitions] Auto num_groups from similarity: {num_groups_eff}")
+        else:
+            num_groups_eff = int(num_groups)
+            print(f"[Partitions] Override num_groups: {num_groups_eff}")
 
 
         # Optimize partitions (ensure grads enabled even if caller is in no_grad)
@@ -339,7 +342,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         with torch.enable_grad():
             scene_partition_results = optimize_scene_partitions(
                 similarity,
-                num_groups=num_groups,
+                num_groups=num_groups_eff,
                 steps=2000,
                 lr=1e-1,
                 lam=0.5,
@@ -353,9 +356,18 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        K = int(num_groups)
-        Lg = int(scene_partition_results[0]["Lg"]) if S > 1 else 0
-        S_eff = Lg + 1 if S > 1 else 1
+        if S > 1:
+            ids_all = torch.stack(
+                [torch.stack(res["group_indices_padded"], dim=0) for res in scene_partition_results],
+                dim=0,
+            ).to(device)  # (B, K, Lg)
+            K = int(ids_all.shape[1])
+            Lg = int(ids_all.shape[2])
+            S_eff = Lg + 1
+        else:
+            K = int(num_groups)
+            Lg = 0
+            S_eff = 1
         BK = B * K
 
         # Precompute vectorized restore indices (B, S) for k and s_eff (GPU-only)
@@ -363,11 +375,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         restore_k = torch.zeros((B, S), dtype=torch.long, device=device)
         restore_s = torch.zeros((B, S), dtype=torch.long, device=device)
         if S > 1:
-            # Stack all padded indices to a tensor (B, K, Lg), values in 0..S-2
-            ids_all = torch.stack(
-                [torch.stack(res["group_indices_padded"], dim=0) for res in scene_partition_results],
-                dim=0,
-            ).to(device)
+            # ids_all already stacked above; values in 0..S-2
             ids_img_all = ids_all + 1  # map to 1..S-1, shape (B, K, Lg)
             Bk, Kl, Lgl = ids_img_all.shape
             frames = torch.arange(1, S, dtype=torch.long, device=device)  # (S-1,)
@@ -392,7 +400,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         if S > 1:
             # GPU index without host roundtrip
             ids_img_all = ids_all + 1  # (B, K, Lg)
-            zero_idx = torch.zeros((B, K, 1), dtype=torch.long, device=device)
+            zero_idx = torch.zeros((B, ids_img_all.shape[1], 1), dtype=torch.long, device=device)
             idx_seq_all = torch.cat([zero_idx, ids_img_all], dim=2)  # (B, K, S_eff)
             # Still loop over b,k to avoid complex batched gather along dim=1
             for b in range(B):
@@ -452,7 +460,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         if 'avg_neighbors_per_frame' not in locals():
             avg_neighbors_per_frame = torch.tensor(0.0)
         predictions["sim_above_thres_avg"] = float(avg_neighbors_per_frame.item())
-        predictions["num_groups_auto"] = int(num_groups)
+        predictions["num_groups_auto"] = int(K)
 
         # Build head processing list: (name, forward_fn, restore_writer)
         heads = []

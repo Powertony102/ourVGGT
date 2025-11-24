@@ -597,6 +597,7 @@ def infer_vggt_and_reconstruct(
     dtype: torch.dtype,
     depth_conf_thresh: float,
     image_paths: list = None,
+    num_groups: int | None = None,
 ) -> Tuple[
     np.ndarray,
     np.ndarray,
@@ -609,7 +610,7 @@ def infer_vggt_and_reconstruct(
     start = time.time()
     with torch.cuda.amp.autocast(dtype=dtype):
         vgg_input_cuda = vgg_input.cuda().to(torch.bfloat16)
-        predictions = model(vgg_input_cuda, image_paths=image_paths)
+        predictions = model(vgg_input_cuda, image_paths=image_paths, num_groups=num_groups)
     torch.cuda.synchronize()
     end = time.time()
     inference_time_ms = (end - start) * 1000.0

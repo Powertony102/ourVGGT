@@ -153,7 +153,6 @@ class Attention(nn.Module):
                     plt.close()
             del attn_maps, attn_map, attn
 
-        # 默认路径：不触发合并时，直接计算 qkv
         merge_cfg = None
         if isinstance(global_merging, dict):
             merge_cfg = global_merging
@@ -193,10 +192,8 @@ class Attention(nn.Module):
                 generator,
                 enable_protection=True,
             )
-            # 先合并 x 以降低 qkv 的计算规模
             x_m = m(x, mode="mean")
             N_m = x_m.shape[1]
-            # 构建与合并后序列对应的位置编码（不聚合，仅选择）
             pos_m = m.build_pos(pos) if pos is not None else None
 
             qkv = (
@@ -211,7 +208,6 @@ class Attention(nn.Module):
                 q = self.rope(q, pos_m)
                 k = self.rope(k, pos_m)
             B_q, H_q, N_q, D_q = q.shape
-            # 用于恢复原长度
             u_a = u
             del x_m, pos_m
 
@@ -258,7 +254,6 @@ class Attention(nn.Module):
         #         )
         #         plt.close()
 
-        # 若进行了预合并，则 N 需更新
         if trigger_merge:
             N = N_q
 

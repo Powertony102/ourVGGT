@@ -37,6 +37,12 @@ if __name__ == "__main__":
     )
     parser.add_argument("--output_path", type=Path, default="./eval_results")
     parser.add_argument("--merging", type=int, default=None)
+    parser.add_argument(
+        "--num_groups",
+        type=int,
+        default=None,
+        help="Override number of subscene groups; None uses auto selection",
+    )
     parser.add_argument("--plot", type=bool, default=True)
     parser.add_argument(
         "--depth_conf_thresh",
@@ -157,7 +163,12 @@ if __name__ == "__main__":
                 all_cam_to_world_mat,
                 inference_time_ms,
             ) = infer_vggt_and_reconstruct(
-                model, vgg_input, dtype, args.depth_conf_thresh, image_paths
+                model,
+                vgg_input,
+                dtype,
+                args.depth_conf_thresh,
+                image_paths,
+                num_groups=args.num_groups,
             )
             print(f"Inference time: {inference_time_ms:.2f}ms")
             frame_count = len(image_paths)
