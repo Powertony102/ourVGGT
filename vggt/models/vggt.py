@@ -443,6 +443,8 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
             z_grouped = z_eff.view(B, K, S_eff, *z_eff.shape[2:])
             batch_idx = torch.arange(B, device=z_eff.device)[:, None]
             out = z_grouped[batch_idx, restore_k, restore_s, ...]
+            out0 = z_grouped.mean(dim=1)[:, 0, ...]
+            out = torch.cat([out0.unsqueeze(1), out[:, 1:, ...]], dim=1)
             return out
 
         predictions = {}
