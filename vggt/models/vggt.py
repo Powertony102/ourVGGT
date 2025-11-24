@@ -356,6 +356,7 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
+        device = images.device
         if S > 1:
             ids_all = torch.stack(
                 [torch.stack(res["group_indices_padded"], dim=0) for res in scene_partition_results],
@@ -371,7 +372,6 @@ class VGGT(nn.Module, PyTorchModelHubMixin):
         BK = B * K
 
         # Precompute vectorized restore indices (B, S) for k and s_eff (GPU-only)
-        device = images.device
         restore_k = torch.zeros((B, S), dtype=torch.long, device=device)
         restore_s = torch.zeros((B, S), dtype=torch.long, device=device)
         if S > 1:
