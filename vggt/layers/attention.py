@@ -160,20 +160,21 @@ class Attention(nn.Module):
             isinstance(merge_cfg, dict) and merge_cfg.get("block") in merge_num
         )
 
-        if not trigger_merge:
-            qkv = (
-                self.qkv(x)
-                .reshape(B, N, 3, self.num_heads, self.head_dim)
-                .permute(2, 0, 3, 1, 4)
-            )
-            q, k, v = qkv.unbind(0)
-            del qkv
-            q, k = self.q_norm(q), self.k_norm(k)
-            if self.rope is not None:
-                q = self.rope(q, pos)
-                k = self.rope(k, pos)
-            B_q, H_q, N_q, D_q = q.shape
-        else:
+        qkv = (
+            self.qkv(x)
+            .reshape(B, N, 3, self.num_heads, self.head_dim)
+            .permute(2, 0, 3, 1, 4)
+        )
+        q, k, v = qkv.unbind(0)
+        del qkv
+        q, k = self.q_norm(q), self.k_norm(k)
+        if self.rope is not None:
+            q = self.rope(q, pos)
+            k = self.rope(k, pos)
+        B_q, H_q, N_q, D_q = q.shape
+
+        u_list = None
+        if trigger_merge:
             generator = torch.Generator(device=x.device)
             generator.manual_seed(33)
             merge_ratio = (
@@ -181,35 +182,47 @@ class Attention(nn.Module):
             )
             r = int(x.shape[1] * merge_ratio)
 
-            m, u = token_merge_bipartite2d(
-                x,
-                self.patch_width,
-                self.patch_height,
-                2,
-                2,
-                r,
-                False,
-                generator,
-                enable_protection=True,
-            )
-            x_m = m(x, mode="mean")
-            N_m = x_m.shape[1]
-            pos_m = m.build_pos(pos) if pos is not None else None
-
-            qkv = (
-                self.qkv(x_m)
-                .reshape(B, N_m, 3, self.num_heads, self.head_dim)
-                .permute(2, 0, 3, 1, 4)
-            )
-            q, k, v = qkv.unbind(0)
-            del qkv
-            q, k = self.q_norm(q), self.k_norm(k)
-            if self.rope is not None and pos_m is not None:
-                q = self.rope(q, pos_m)
-                k = self.rope(k, pos_m)
-            B_q, H_q, N_q, D_q = q.shape
-            u_a = u
-            del x_m, pos_m
+            q_list = []
+            k_list = []
+            v_list = []
+            u_list = []
+            for b in range(B):
+                m_b, u_b = token_merge_bipartite2d(
+                    x[b : b + 1],
+                    self.patch_width,
+                    self.patch_height,
+                    2,
+                    2,
+                    r,
+                    False,
+                    generator,
+                    enable_protection=True,
+                )
+                q_merge_in = q[b : b + 1].permute(0, 2, 1, 3).reshape(1, N_q, H_q * D_q)
+                k_merge_in = k[b : b + 1].permute(0, 2, 1, 3).reshape(1, N_q, H_q * D_q)
+                v_merge_in = v[b : b + 1].permute(0, 2, 1, 3).reshape(1, N_q, H_q * D_q)
+                q_out, k_out, v_out = m_b(
+                    q_merge_in,
+                    mode="mean",
+                    extra_tensors=k_merge_in,
+                    extra_tensors_2=v_merge_in,
+                )
+                N_m = q_out.shape[1]
+                q_b = q_out.reshape(1, N_m, H_q, D_q).permute(0, 2, 1, 3)
+                k_b = k_out.reshape(1, N_m, H_q, D_q).permute(0, 2, 1, 3)
+                v_b = v_out.reshape(1, N_m, H_q, D_q).permute(0, 2, 1, 3)
+                q_list.append(q_b)
+                k_list.append(k_b)
+                v_list.append(v_b)
+                u_list.append(u_b)
+                del q_merge_in, k_merge_in, v_merge_in, q_out, k_out, v_out
+            q = torch.cat(q_list, dim=0)
+            k = torch.cat(k_list, dim=0)
+            v = torch.cat(v_list, dim=0)
+            N = q.shape[2]
+            del q_list, k_list, v_list
+        else:
+            N = N_q
 
         # frame_token_num = self.patch_height * self.patch_width + 5
         # if N_q % frame_token_num != 0:
@@ -254,9 +267,6 @@ class Attention(nn.Module):
         #         )
         #         plt.close()
 
-        if trigger_merge:
-            N = N_q
-
         x = F.scaled_dot_product_attention(
             q,
             k,
@@ -269,8 +279,11 @@ class Attention(nn.Module):
         x = self.proj(x)
         x = self.proj_drop(x)
         if trigger_merge:
-            x = u_a(x)
-            del u_a
+            x_list = []
+            for b in range(B):
+                x_list.append(u_list[b](x[b : b + 1]))
+            x = torch.cat(x_list, dim=0)
+            del x_list, u_list
         return x
 
 
