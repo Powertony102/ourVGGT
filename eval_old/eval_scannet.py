@@ -147,8 +147,7 @@ if __name__ == "__main__":
                 continue
 
             frame_ids = selected_frame_ids
-            images_array = np.stack(images)
-            vgg_input, patch_width, patch_height = get_vgg_input_imgs(images_array)
+            vgg_input, patch_width, patch_height = get_vgg_input_imgs(images)
             print(f"Patch dimensions: {patch_width}x{patch_height}")
 
             # Update model attention layers with dynamic patch dimensions
@@ -177,12 +176,25 @@ if __name__ == "__main__":
             print(f"Inference FPS (frames/s): {fps:.2f} [{time.strftime('%Y-%m-%d %H:%M:%S')}]")
             scene_infer_times[scene].append(float(fps))
 
-            merged_points = np.vstack(all_world_points)
-            if merged_points.shape[0] > 999999:
-                sample_indices = np.random.choice(
-                    merged_points.shape[0], 999999, replace=False
-                )
-                merged_points = merged_points[sample_indices]
+            max_points = 999999
+            total_points = sum(p.shape[0] for p in all_world_points)
+            if total_points <= max_points:
+                merged_points = np.concatenate(all_world_points, axis=0)
+            else:
+                sizes = [p.shape[0] for p in all_world_points]
+                alloc = [int(max_points * s / total_points) for s in sizes]
+                short = max_points - sum(alloc)
+                if short > 0:
+                    order = np.argsort(-np.array(sizes))
+                    for i in order[:short]:
+                        alloc[i] += 1
+                sampled = []
+                for arr, k in zip(all_world_points, alloc):
+                    if k <= 0:
+                        continue
+                    idx = np.random.choice(arr.shape[0], k, replace=False)
+                    sampled.append(arr[idx])
+                merged_points = np.concatenate(sampled, axis=0)
             all_world_points = [merged_points]
 
             # Process results
