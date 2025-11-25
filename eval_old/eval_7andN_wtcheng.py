@@ -45,7 +45,7 @@ def get_args_parser():
     parser.add_argument(
         "--output_dir",
         type=str,
-        default="/root/autodl-tmp/outputs/eval_7andN/",
+        default="./outputs/eval_7andN_ours+fast/",
         help="value for outdir",
     )
     parser.add_argument("--size", type=int, default=518)
