@@ -264,7 +264,9 @@ def gradio_demo(
     print(f"Total time: {end_time - start_time:.2f} seconds (including IO)")
     log_msg = f"Reconstruction Success ({len(all_files)} frames). Waiting for visualization."
 
-    return glbfile, log_msg, gr.Dropdown(choices=frame_filter_choices, value=frame_filter, interactive=True)
+    dropdown1 = gr.Dropdown(choices=frame_filter_choices, value=frame_filter, interactive=True)
+    dropdown2 = gr.Dropdown(choices=frame_filter_choices, value=frame_filter, interactive=True)
+    return glbfile, log_msg, dropdown1, dropdown2
 
 
 # -------------------------------------------------------------------------
