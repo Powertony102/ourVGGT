@@ -186,17 +186,18 @@ def main(args):
 
                 with torch.cuda.amp.autocast(dtype=dtype):
                     with torch.no_grad():
-                        torch.cuda.synchronize()
-                        start = time.time()
+                        if isinstance(batch, dict) and "img" in batch:
+                            imgs_tensor = batch["img"]
+                        start_event = torch.cuda.Event(enable_timing=True)
+                        end_event = torch.cuda.Event(enable_timing=True)
+                        start_event.record()
                         preds = model(imgs_tensor)
+                        end_event.record()
                         torch.cuda.synchronize()
-                        end = time.time()
-                        elapsed_s = end - start
+                        elapsed_s = start_event.elapsed_time(end_event) / 1000.0
                         frame_count = imgs_tensor.shape[0]
                         fps = (
-                            frame_count / elapsed_s
-                            if elapsed_s > 0
-                            else float("inf")
+                            frame_count / elapsed_s if elapsed_s > 0 else float("inf")
                         )
                         print(f"Inference FPS (frames/s): {fps:.2f}")
 
