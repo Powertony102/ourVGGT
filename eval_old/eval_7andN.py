@@ -543,10 +543,15 @@ def main(args):
                     except Exception:
                         pass
 
-                    valid_length = len(preds) // args.revisit
+                    valid_length = len(preds) // args.revisit if args.revisit > 0 else len(preds)
                     if args.revisit > 1:
+                        if valid_length == 0:
+                            valid_length = len(preds)
                         preds = preds[-valid_length:]
                         batch = batch[-valid_length:]
+                    if len(preds) == 0 or len(batch) == 0:
+                        print("Skip sample: empty preds or batch after revisit slicing")
+                        continue
 
                     # Evaluation
                     print(f"Evaluation for {name_data} {data_idx+1}/{len(dataset)}")
@@ -601,6 +606,9 @@ def main(args):
                         masks_all.append(mask[None, ...])
                         conf_all.append(conf[None, ...])
 
+                if len(images_all) == 0 or len(pts_all) == 0 or len(pts_gt_all) == 0 or len(masks_all) == 0:
+                    print("Skip sample: empty aggregation lists, no valid points/images")
+                    continue
                 images_all = np.concatenate(images_all, axis=0)
                 pts_all = np.concatenate(pts_all, axis=0)
                 pts_gt_all = np.concatenate(pts_gt_all, axis=0)
