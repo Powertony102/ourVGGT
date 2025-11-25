@@ -72,6 +72,13 @@ def run_model(target_dir, model) -> dict:
     images = load_and_preprocess_images(image_names).to(device)
     print(f"Preprocessed images shape: {images.shape}")
 
+    patch_size = model.aggregator.patch_size
+    if images.shape[-2] % patch_size != 0 or images.shape[-1] % patch_size != 0:
+        raise ValueError(f"Image dimensions {images.shape[-2:]} must be divisible by patch size {patch_size}")
+    patch_height = images.shape[-2] // patch_size
+    patch_width = images.shape[-1] // patch_size
+    model.update_patch_dimensions(patch_width, patch_height)
+
     # Run inference
     print("Running inference...")
     dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
