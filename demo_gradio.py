@@ -485,19 +485,19 @@ with gr.Blocks(
             elem_id="my_radio",
         )
 
-            with gr.Row():
-                conf_thres = gr.Slider(minimum=0, maximum=100, value=50, step=0.1, label="Confidence Threshold (%)")
-                frame_filter = gr.Dropdown(choices=["All"], value="All", label="Show Points from Frame")
-                with gr.Column():
-                    show_cam = gr.Checkbox(label="Show Camera", value=True)
-                    mask_sky = gr.Checkbox(label="Filter Sky", value=False)
-                    mask_black_bg = gr.Checkbox(label="Filter Black Background", value=False)
-                    mask_white_bg = gr.Checkbox(label="Filter White Background", value=False)
+        with gr.Row():
+            conf_thres = gr.Slider(minimum=0, maximum=100, value=50, step=0.1, label="Confidence Threshold (%)")
+            frame_filter = gr.Dropdown(choices=["All"], value="All", label="Show Points from Frame")
+            with gr.Column():
+                show_cam = gr.Checkbox(label="Show Camera", value=True)
+                mask_sky = gr.Checkbox(label="Filter Sky", value=False)
+                mask_black_bg = gr.Checkbox(label="Filter Black Background", value=False)
+                mask_white_bg = gr.Checkbox(label="Filter White Background", value=False)
 
-            with gr.Row():
-                render_frame = gr.Dropdown(choices=["All"], value="All", label="Render From Frame")
-                render_btn = gr.Button("Render & Download View", scale=1, variant="secondary")
-                rendered_image = gr.Image(label="Rendered View", show_download_button=True)
+        with gr.Row():
+            render_frame = gr.Dropdown(choices=["All"], value="All", label="Render From Frame")
+            render_btn = gr.Button("Render & Download View", scale=1, variant="secondary")
+            rendered_image = gr.Image(label="Rendered View", show_download_button=True)
 
     # ---------------------- Examples section ----------------------
     examples = [
