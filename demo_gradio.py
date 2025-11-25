@@ -32,7 +32,7 @@ print("Initializing and loading VGGT model...")
 # model = VGGT()
 # _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
 # model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
-model = VGGT()
+model = VGGT(enable_point=True)
 checkpoint = torch.load("./ckpt/model_tracker_fixed_e20.pt", map_location="cuda")
 missing, unexpected = model.load_state_dict(checkpoint, strict=False)
 if missing or unexpected:
@@ -81,7 +81,8 @@ def run_model(target_dir, model) -> dict:
 
     # Run inference
     print("Running inference...")
-    dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    # dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
+    dtype = torch.float16
 
     with torch.no_grad():
         with torch.cuda.amp.autocast(dtype=dtype):
@@ -475,14 +476,14 @@ with gr.Blocks(
                     scale=1,
                 )
 
-            with gr.Row():
-                prediction_mode = gr.Radio(
-                    ["Depthmap and Camera Branch", "Pointmap Branch"],
-                    label="Select a Prediction Mode",
-                    value="Depthmap and Camera Branch",
-                    scale=1,
-                    elem_id="my_radio",
-                )
+    with gr.Row():
+        prediction_mode = gr.Radio(
+            ["Depthmap and Camera Branch", "Pointmap Branch"],
+            label="Select a Prediction Mode",
+            value="Depthmap and Camera Branch",
+            scale=1,
+            elem_id="my_radio",
+        )
 
             with gr.Row():
                 conf_thres = gr.Slider(minimum=0, maximum=100, value=50, step=0.1, label="Confidence Threshold (%)")
@@ -492,6 +493,11 @@ with gr.Blocks(
                     mask_sky = gr.Checkbox(label="Filter Sky", value=False)
                     mask_black_bg = gr.Checkbox(label="Filter Black Background", value=False)
                     mask_white_bg = gr.Checkbox(label="Filter White Background", value=False)
+
+            with gr.Row():
+                render_frame = gr.Dropdown(choices=["All"], value="All", label="Render From Frame")
+                render_btn = gr.Button("Render & Download View", scale=1, variant="secondary")
+                rendered_image = gr.Image(label="Rendered View", show_download_button=True)
 
     # ---------------------- Examples section ----------------------
     examples = [
@@ -528,7 +534,7 @@ with gr.Blocks(
         glbfile, log_msg, dropdown = gradio_demo(
             target_dir, conf_thres, frame_filter, mask_black_bg, mask_white_bg, show_cam, mask_sky, prediction_mode
         )
-        return glbfile, log_msg, target_dir, dropdown, image_paths
+        return glbfile, log_msg, target_dir, dropdown, dropdown, image_paths
 
     gr.Markdown("Click any row to load an example.", elem_classes=["example-log"])
 
@@ -546,7 +552,7 @@ with gr.Blocks(
             prediction_mode,
             is_example,
         ],
-        outputs=[reconstruction_output, log_output, target_dir_output, frame_filter, image_gallery],
+        outputs=[reconstruction_output, log_output, target_dir_output, frame_filter, render_frame, image_gallery],
         fn=example_pipeline,
         cache_examples=False,
         examples_per_page=50,
@@ -573,7 +579,7 @@ with gr.Blocks(
             mask_sky,
             prediction_mode,
         ],
-        outputs=[reconstruction_output, log_output, frame_filter],
+        outputs=[reconstruction_output, log_output, frame_filter, render_frame],
     ).then(
         fn=lambda: "False", inputs=[], outputs=[is_example]  # set is_example to "False"
     )
@@ -699,6 +705,103 @@ with gr.Blocks(
         fn=update_gallery_on_upload,
         inputs=[input_video, input_images],
         outputs=[reconstruction_output, target_dir_output, image_gallery, log_output],
+    )
+
+    def render_view_fn(target_dir, render_frame, conf_thres, mask_black_bg, mask_white_bg, show_cam, mask_sky, prediction_mode):
+        if not target_dir or target_dir == "None" or not os.path.isdir(target_dir):
+            return None
+        predictions_path = os.path.join(target_dir, "predictions.npz")
+        if not os.path.exists(predictions_path):
+            return None
+        loaded = np.load(predictions_path)
+        keys = [
+            "pose_enc",
+            "depth",
+            "depth_conf",
+            "world_points",
+            "world_points_conf",
+            "images",
+            "extrinsic",
+            "intrinsic",
+            "world_points_from_depth",
+        ]
+        predictions = {k: np.array(loaded[k]) for k in keys if k in loaded}
+
+        if "Pointmap" in prediction_mode and "world_points" in predictions:
+            pts = predictions["world_points"]
+            conf = predictions.get("world_points_conf", np.ones_like(pts[..., 0]))
+        else:
+            pts = predictions["world_points_from_depth"]
+            conf = predictions.get("depth_conf", np.ones_like(pts[..., 0]))
+
+        imgs = predictions["images"]
+        if imgs.ndim == 4 and imgs.shape[1] == 3:
+            imgs_nhwc = np.transpose(imgs, (0, 2, 3, 1))
+        else:
+            imgs_nhwc = imgs
+        S, H, W, _ = pts.shape
+
+        colors = (imgs_nhwc.reshape(-1, 3) * 255).astype(np.uint8)
+        points = pts.reshape(-1, 3)
+        conf_flat = conf.reshape(-1)
+        thr = 0.0 if conf_thres == 0 else np.percentile(conf_flat, conf_thres)
+        mask = (conf_flat >= thr) & (conf_flat > 1e-5)
+        points = points[mask]
+        colors = colors[mask]
+
+        ex = predictions["extrinsic"]
+        K = predictions["intrinsic"]
+
+        if render_frame is None or render_frame == "All":
+            idx = 0
+        else:
+            try:
+                idx = int(str(render_frame).split(":")[0])
+            except Exception:
+                idx = 0
+
+        Rt = np.eye(4)
+        Rt[:3, :4] = ex[idx]
+        Pw = points
+        Pc = Pw @ Rt[:3, :3].T + Rt[:3, 3]
+        z = Pc[:, 2]
+        valid = z > 1e-6
+        Pc = Pc[valid]
+        colors_v = colors[valid]
+        z = z[valid]
+
+        Kk = K[idx]
+        fx, fy = Kk[0, 0], Kk[1, 1]
+        cx, cy = Kk[0, 2], Kk[1, 2]
+        u = (fx * Pc[:, 0] / z + cx)
+        v = (fy * Pc[:, 1] / z + cy)
+        u = np.clip(np.round(u).astype(np.int64), 0, W - 1)
+        v = np.clip(np.round(v).astype(np.int64), 0, H - 1)
+        lin = v * W + u
+        order = np.argsort(z)
+        lin_sorted = lin[order]
+        first_idx = np.unique(lin_sorted, return_index=True)[1]
+        sel = order[first_idx]
+        img = np.zeros((H, W, 3), dtype=np.uint8)
+        img_flat = img.reshape(-1, 3)
+        img_flat[lin[sel]] = colors_v[sel]
+        out_path = os.path.join(target_dir, f"render_view_{idx}.png")
+        cv2.imwrite(out_path, img[..., ::-1])
+        return out_path
+
+    render_btn.click(
+        fn=render_view_fn,
+        inputs=[
+            target_dir_output,
+            render_frame,
+            conf_thres,
+            mask_black_bg,
+            mask_white_bg,
+            show_cam,
+            mask_sky,
+            prediction_mode,
+        ],
+        outputs=[rendered_image],
     )
 
     demo.queue(max_size=20).launch(show_error=True, share=False, server_name="127.0.0.1", server_port=7860)
