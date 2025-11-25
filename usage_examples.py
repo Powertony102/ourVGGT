@@ -87,6 +87,18 @@ def run_example_command():
     print("    --output_path ./video_output \\")
     print("    --input_frame 50 \\")
     print("    --scene_name scene0000_00")
+    print()
+    print("Create ZIP file only (no video):")
+    print("python frame_selection_video_synthesis.py \\")
+    print("    --data_dir /path/to/scannet/data \\")
+    print("    --output_path ./frames_output \\")
+    print("    --input_frame 100 \\")
+    print("    --scene_name scene0000_00 \\")
+    print("    --skip_video \\")
+    print("    --create_zip")
+    print()
+    print("Download-ready ZIP files will be created in:")
+    print("  ./video_output/input_frame_XXX/scene_name/scene_name_selected_frames.zip")
 
 
 def validate_installation():

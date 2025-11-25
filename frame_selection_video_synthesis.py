@@ -9,6 +9,8 @@ import json
 import logging
 import subprocess
 import time
+import zipfile
+import shutil
 from pathlib import Path
 from typing import List, Tuple, Optional
 import numpy as np
@@ -211,6 +213,69 @@ def create_video_from_frames(
             shutil.rmtree(temp_dir)
 
 
+def create_frames_zip(
+    selected_image_paths: List[Path],
+    selected_frame_ids: List[int],
+    output_path: Path,
+    scene_name: str,
+) -> bool:
+    """
+    Create a ZIP file containing all selected frames
+    
+    Args:
+        selected_image_paths: List of selected image paths
+        selected_frame_ids: List of corresponding frame IDs
+        output_path: Output ZIP file path
+        scene_name: Name of the scene
+        
+    Returns:
+        Success status
+    """
+    if not selected_image_paths:
+        logger.error("No images to add to ZIP file")
+        return False
+    
+    try:
+        with zipfile.ZipFile(output_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Add each selected frame to the ZIP
+            for i, (img_path, frame_id) in enumerate(zip(selected_image_paths, selected_frame_ids)):
+                if img_path.exists():
+                    # Create a sequential filename for easy ordering
+                    arcname = f"{scene_name}_frame_{i:06d}_id_{frame_id:06d}{img_path.suffix}"
+                    zipf.write(img_path, arcname)
+                    logger.debug(f"Added {img_path.name} as {arcname}")
+                else:
+                    logger.warning(f"Image file not found: {img_path}")
+            
+            # Add a manifest file with frame information
+            manifest = {
+                "scene_name": scene_name,
+                "total_frames": len(selected_image_paths),
+                "frames": [
+                    {
+                        "sequence_index": i,
+                        "frame_id": int(frame_id),
+                        "original_filename": img_path.name,
+                        "zip_filename": f"{scene_name}_frame_{i:06d}_id_{frame_id:06d}{img_path.suffix}"
+                    }
+                    for i, (img_path, frame_id) in enumerate(zip(selected_image_paths, selected_frame_ids))
+                ],
+                "creation_timestamp": datetime.now().isoformat(),
+                "zip_creation_notes": "Frames selected using eval_scannet.py logic"
+            }
+            
+            zipf.writestr(f"{scene_name}_manifest.json", json.dumps(manifest, indent=2))
+            logger.info(f"Added manifest file with frame metadata")
+        
+        logger.info(f"ZIP file created successfully: {output_path}")
+        logger.info(f"ZIP file size: {output_path.stat().st_size / (1024*1024):.2f} MB")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error creating ZIP file: {e}")
+        return False
+
+
 def save_frame_metadata(
     selected_frame_ids: List[int],
     selected_image_paths: List[Path],
@@ -253,6 +318,8 @@ def process_scene(
     input_frames: int,
     fps: int = 30,
     quality: str = "high",
+    create_zip: bool = True,
+    skip_video: bool = False,
 ) -> bool:
     """
     Process a single scene: select frames and create video
@@ -263,6 +330,8 @@ def process_scene(
         input_frames: Number of frames to select
         fps: Video frame rate
         quality: Video quality preset
+        create_zip: Whether to create ZIP file with frames
+        skip_video: Whether to skip video creation
         
     Returns:
         Success status
@@ -315,15 +384,18 @@ def process_scene(
         scene_output_dir = output_dir / f"input_frame_{input_frames}" / scene_name
         scene_output_dir.mkdir(parents=True, exist_ok=True)
         
-        # Create video
-        video_path = scene_output_dir / f"{scene_name}_frames_{len(selected_frame_ids)}.mp4"
-        success = create_video_from_frames(
-            selected_image_paths, video_path, fps=fps, quality=quality
-        )
+        video_path = None
         
-        if not success:
-            logger.error(f"Failed to create video for scene {scene_name}")
-            return False
+        # Create video (unless skipped)
+        if not skip_video:
+            video_path = scene_output_dir / f"{scene_name}_frames_{len(selected_frame_ids)}.mp4"
+            success = create_video_from_frames(
+                selected_image_paths, video_path, fps=fps, quality=quality
+            )
+            
+            if not success:
+                logger.error(f"Failed to create video for scene {scene_name}")
+                return False
         
         # Save metadata
         metadata_path = scene_output_dir / f"{scene_name}_metadata.json"
@@ -336,7 +408,30 @@ def process_scene(
             input_frames,
         )
         
+        # Create ZIP file with selected frames (if requested)
+        zip_path = None
+        if create_zip:
+            zip_path = scene_output_dir / f"{scene_name}_selected_frames.zip"
+            zip_success = create_frames_zip(
+                selected_image_paths,
+                selected_frame_ids,
+                zip_path,
+                scene_name,
+            )
+            
+            if zip_success:
+                logger.info(f"ZIP file created for download: {zip_path}")
+            else:
+                logger.warning(f"Failed to create ZIP file for scene {scene_name}")
+        
+        # Log summary
         logger.info(f"Successfully processed scene: {scene_name}")
+        if video_path:
+            logger.info(f"  Video: {video_path}")
+        if zip_path:
+            logger.info(f"  ZIP: {zip_path}")
+        logger.info(f"  Metadata: {metadata_path}")
+        
         return True
         
     except Exception as e:
@@ -392,6 +487,18 @@ def main():
         default=None,
         help="Process specific scene only"
     )
+    parser.add_argument(
+        "--create_zip",
+        action="store_true",
+        default=True,
+        help="Create ZIP file with selected frames (default: True)"
+    )
+    parser.add_argument(
+        "--skip_video",
+        action="store_true",
+        default=False,
+        help="Skip video creation (only create ZIP and metadata)"
+    )
     
     args = parser.parse_args()
     
@@ -424,6 +531,8 @@ def main():
             args.input_frame,
             fps=args.fps,
             quality=args.quality,
+            create_zip=args.create_zip,
+            skip_video=args.skip_video,
         ):
             successful_scenes += 1
         else:
