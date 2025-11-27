@@ -221,6 +221,23 @@ def main(args):
                             except AttributeError:
                                 view[name] = val
 
+                # Ensure masks and poses are torch tensors with batch dimension
+                for view in batch:
+                    if "valid_mask" in view:
+                        vm = view["valid_mask"]
+                        if isinstance(vm, np.ndarray):
+                            vm_t = torch.from_numpy(vm.astype(np.bool_)).unsqueeze(0)
+                            view["valid_mask"] = vm_t.to(device, non_blocking=True)
+                        elif torch.is_tensor(vm) and vm.ndim == 2:
+                            view["valid_mask"] = vm.unsqueeze(0).to(device, non_blocking=True)
+                    if "camera_pose" in view:
+                        cp = view["camera_pose"]
+                        if isinstance(cp, np.ndarray):
+                            cp_t = torch.from_numpy(cp.astype(np.float32)).unsqueeze(0)
+                            view["camera_pose"] = cp_t.to(device, non_blocking=True)
+                        elif torch.is_tensor(cp) and cp.ndim == 2:
+                            view["camera_pose"] = cp.unsqueeze(0).to(device, non_blocking=True)
+
                 pts_all = []
                 pts_gt_all = []
                 images_all = []
