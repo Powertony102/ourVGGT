@@ -185,6 +185,9 @@ def main(args):
                             image_paths, available_pose_frame_ids, args.input_frame
                         )
                     )
+                    print(
+                        f"[FrameSelection] total_frames={len(available_pose_frame_ids)} selected_ids={selected_frame_ids}"
+                    )
                     
                     # Filter views based on selected indices
                     selected_views = [views[i] for i in selected_pose_indices if i < len(views)]
