@@ -190,13 +190,13 @@ def main(args):
                         print(f"No frames selected for data_idx {data_idx}, skipping")
                         continue
                     
-                    batch = default_collate(selected_views)
+                    batch = selected_views
                 else:
                     # Fallback: use original batch
                     print(
                         f"[FrameSelection] total_frames=0 selected_ids=[] (fallback to original batch)"
                     )
-                    batch = default_collate([full_batch])
+                    batch = [full_batch]
                 ignore_keys = set(
                     [
                         "depthmap",
@@ -208,30 +208,18 @@ def main(args):
                         "rng",
                     ]
                 )
-                if isinstance(batch, dict):
-                    for name, val in batch.items():
+                for view in batch:
+                    for name in list(view.keys()):
                         if name in ignore_keys:
                             continue
+                        val = view[name]
                         if isinstance(val, (tuple, list)):
-                            batch[name] = [x.to(device, non_blocking=True) for x in val]
+                            view[name] = [x.to(device, non_blocking=True) for x in val]
                         else:
                             try:
-                                batch[name] = val.to(device, non_blocking=True)
+                                view[name] = val.to(device, non_blocking=True)
                             except AttributeError:
-                                batch[name] = val
-                else:
-                    for view in batch:
-                        for name in list(view.keys()):
-                            if name in ignore_keys:
-                                continue
-                            val = view[name]
-                            if isinstance(val, (tuple, list)):
-                                view[name] = [x.to(device, non_blocking=True) for x in val]
-                            else:
-                                try:
-                                    view[name] = val.to(device, non_blocking=True)
-                                except AttributeError:
-                                    view[name] = val
+                                view[name] = val
 
                 pts_all = []
                 pts_gt_all = []
@@ -246,20 +234,14 @@ def main(args):
                     else torch.float16
                 )
                 with torch.cuda.amp.autocast(dtype=dtype):
-                    if isinstance(batch, dict) and "img" in batch:
-                        batch["img"] = (batch["img"] + 1.0) / 2.0
-                    elif isinstance(batch, list) and all(
-                        isinstance(v, dict) and "img" in v for v in batch
-                    ):
-                        for view in batch:
-                            view["img"] = (view["img"] + 1.0) / 2.0
-                        # Gather all `img` tensors into a single tensor of shape [N, C, H, W]
-                        imgs_tensor = torch.cat([v["img"] for v in batch], dim=0)
+                    for view in batch:
+                        view["img"] = (view["img"] + 1.0) / 2.0
+                    imgs_tensor = torch.cat([v["img"] for v in batch], dim=0)
 
                 with torch.cuda.amp.autocast(dtype=dtype):
                     with torch.no_grad():
-                        if isinstance(batch, dict) and "img" in batch:
-                            imgs_tensor = batch["img"]
+                    # batch is a list of dicts; build image tensor
+                    imgs_tensor = torch.cat([v["img"] for v in batch], dim=0)
                         start_event = torch.cuda.Event(enable_timing=True)
                         end_event = torch.cuda.Event(enable_timing=True)
                         start_event.record()
