@@ -236,7 +236,7 @@ def main(args):
                 with torch.cuda.amp.autocast(dtype=dtype):
                     for view in batch:
                         view["img"] = (view["img"] + 1.0) / 2.0
-                    imgs_tensor = torch.cat([v["img"] for v in batch], dim=0)
+                    imgs_tensor = torch.stack([v["img"] for v in batch], dim=0)
 
                 with torch.cuda.amp.autocast(dtype=dtype):
                     with torch.no_grad():
