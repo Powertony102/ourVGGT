@@ -153,29 +153,23 @@ def main(args):
                 else:
                     views = [full_batch]
                 
-                # Build image_paths and available_pose_frame_ids from views
+                # Build numeric image_paths and available_pose_frame_ids from views
                 image_paths = []
                 available_pose_frame_ids = []
-                for view in views:
-                    instance = view.get("instance", None)
+                for i, view in enumerate(views):
                     label = view.get("label", None)
-                    if isinstance(instance, str):
-                        image_paths.append(Path(instance))
-                    elif isinstance(label, str):
-                        # Extract frame id from label (format: "scene_id/frame_id")
+                    frame_id = None
+                    if isinstance(label, str):
                         try:
                             frame_id_str = label.rsplit("/", 1)[-1]
-                            # Remove leading zeros and convert to int
                             frame_id = int(frame_id_str.lstrip("0") or "0")
-                            available_pose_frame_ids.append(frame_id)
-                        except:
-                            available_pose_frame_ids.append(len(available_pose_frame_ids))
-                    else:
-                        available_pose_frame_ids.append(len(available_pose_frame_ids))
-                
-                # If image_paths is empty, create dummy paths based on indices
-                if not image_paths:
-                    image_paths = [Path(f"frame_{i:06d}") for i in available_pose_frame_ids]
+                        except Exception:
+                            frame_id = None
+                    if frame_id is None:
+                        frame_id = i
+                    available_pose_frame_ids.append(frame_id)
+                    # Ensure numeric stem to satisfy build_frame_selection
+                    image_paths.append(Path(f"{frame_id:06d}"))
                 
                 # Use build_frame_selection to select frames
                 if len(available_pose_frame_ids) > 0:
@@ -199,6 +193,9 @@ def main(args):
                     batch = default_collate(selected_views)
                 else:
                     # Fallback: use original batch
+                    print(
+                        f"[FrameSelection] total_frames=0 selected_ids=[] (fallback to original batch)"
+                    )
                     batch = default_collate([full_batch])
                 ignore_keys = set(
                     [
