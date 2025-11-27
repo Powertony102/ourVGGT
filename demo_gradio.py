@@ -469,7 +469,35 @@ with gr.Blocks(
                 log_output = gr.Markdown(
                     "Please upload a video or images, then click Reconstruct.", elem_classes=["custom-log"]
                 )
-                reconstruction_output = gr.Model3D(height=520, zoom_speed=0.5, pan_speed=0.5)
+                reconstruction_output = gr.Model3D(height=520, zoom_speed=0.5, pan_speed=0.5, elem_id="recon_viewer")
+
+                gr.HTML(
+                    """
+                    <div style="display:flex; justify-content:flex-end; margin: 8px 0;">
+                        <button style="padding:8px 12px; border-radius:6px; background:#0891b2; color:white; border:none; cursor:pointer;" onclick="
+                            const viewer = document.getElementById('recon_viewer');
+                            if (!viewer) { alert('Viewer not ready'); return; }
+                            let canvas = viewer.querySelector('canvas');
+                            const mv = viewer.querySelector('model-viewer');
+                            if (!canvas && mv && mv.shadowRoot) {
+                                canvas = mv.shadowRoot.querySelector('canvas');
+                            }
+                            if (!canvas) { alert('Canvas not found'); return; }
+                            try {
+                                const url = canvas.toDataURL('image/png');
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = 'pointcloud_view.png';
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                            } catch (e) {
+                                alert('Screenshot failed');
+                            }
+                        ">导出当前视图截图</button>
+                    </div>
+                    """
+                )
 
             with gr.Row():
                 submit_btn = gr.Button("Reconstruct", scale=1, variant="primary")
