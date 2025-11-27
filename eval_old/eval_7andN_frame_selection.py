@@ -53,7 +53,7 @@ def get_args_parser():
     parser.add_argument("--freeze", action="store_true")
     parser.add_argument("--use_proj", action="store_true")
     parser.add_argument(
-        "--merging", type=int, default=0, help="VGGT aggregator merging steps"
+        "--merging", type=int, default=None, help="VGGT aggregator merging steps"
     )
     parser.add_argument("--kf", type=int, default=2, help="key frame")
     parser.add_argument(
