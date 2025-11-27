@@ -237,6 +237,17 @@ def main(args):
                             view["camera_pose"] = cp_t.to(device, non_blocking=True)
                         elif torch.is_tensor(cp) and cp.ndim == 2:
                             view["camera_pose"] = cp.unsqueeze(0).to(device, non_blocking=True)
+                    if "pts3d" in view:
+                        p3d = view["pts3d"]
+                        if isinstance(p3d, np.ndarray):
+                            p3d_t = torch.from_numpy(p3d.astype(np.float32))
+                        elif torch.is_tensor(p3d):
+                            p3d_t = p3d.to(torch.float32)
+                        else:
+                            p3d_t = torch.as_tensor(p3d, dtype=torch.float32)
+                        if p3d_t.ndim == 3:
+                            p3d_t = p3d_t.unsqueeze(0)
+                        view["pts3d"] = p3d_t.to(device, non_blocking=True)
 
                 pts_all = []
                 pts_gt_all = []
@@ -339,7 +350,11 @@ def main(args):
                         if in_camera1 is None:
                             in_camera1 = view["camera_pose"][0].cpu()
 
-                        image = view["img"].permute(0, 2, 3, 1).cpu().numpy()[0]
+                        img_t = view["img"]
+                        if torch.is_tensor(img_t) and img_t.ndim == 3:
+                            image = img_t.permute(1, 2, 0).cpu().numpy()
+                        else:
+                            image = img_t.permute(0, 2, 3, 1).cpu().numpy()[0]
                         mask = view["valid_mask"].cpu().numpy()[0]
 
                         pts = pred_pts[j].cpu().numpy()[0]
@@ -370,7 +385,7 @@ def main(args):
                 pts_gt_all = np.concatenate(pts_gt_all, axis=0)
                 masks_all = np.concatenate(masks_all, axis=0)
 
-                scene_id = view["label"][0].rsplit("/", 1)[0]
+                scene_id = view["label"].rsplit("/", 1)[0]
                 # Record FPS per scene for averaging later
                 try:
                     scene_infer_times[scene_id].append(float(fps))
