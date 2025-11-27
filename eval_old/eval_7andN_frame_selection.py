@@ -208,18 +208,30 @@ def main(args):
                         "rng",
                     ]
                 )
-                for view in batch:
-                    for name in view.keys():  # pseudo_focal
+                if isinstance(batch, dict):
+                    for name, val in batch.items():
                         if name in ignore_keys:
                             continue
-                        if isinstance(view[name], tuple) or isinstance(
-                            view[name], list
-                        ):
-                            view[name] = [
-                                x.to(device, non_blocking=True) for x in view[name]
-                            ]
+                        if isinstance(val, (tuple, list)):
+                            batch[name] = [x.to(device, non_blocking=True) for x in val]
                         else:
-                            view[name] = view[name].to(device, non_blocking=True)
+                            try:
+                                batch[name] = val.to(device, non_blocking=True)
+                            except AttributeError:
+                                batch[name] = val
+                else:
+                    for view in batch:
+                        for name in list(view.keys()):
+                            if name in ignore_keys:
+                                continue
+                            val = view[name]
+                            if isinstance(val, (tuple, list)):
+                                view[name] = [x.to(device, non_blocking=True) for x in val]
+                            else:
+                                try:
+                                    view[name] = val.to(device, non_blocking=True)
+                                except AttributeError:
+                                    view[name] = val
 
                 pts_all = []
                 pts_gt_all = []
