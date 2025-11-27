@@ -240,8 +240,6 @@ def main(args):
 
                 with torch.cuda.amp.autocast(dtype=dtype):
                     with torch.no_grad():
-                    # batch is a list of dicts; build image tensor
-                    imgs_tensor = torch.cat([v["img"] for v in batch], dim=0)
                         start_event = torch.cuda.Event(enable_timing=True)
                         end_event = torch.cuda.Event(enable_timing=True)
                         start_event.record()
