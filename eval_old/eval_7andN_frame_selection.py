@@ -62,6 +62,12 @@ def get_args_parser():
         default=200,
         help="Maximum number of frames selected for processing per scene",
     )
+    parser.add_argument(
+        "--num_groups",
+        type=int,
+        default=None,
+        help="Enable subscene grouping with the specified number of groups",
+    )
     return parser
 
 
@@ -271,7 +277,7 @@ def main(args):
                         start_event = torch.cuda.Event(enable_timing=True)
                         end_event = torch.cuda.Event(enable_timing=True)
                         start_event.record()
-                        preds = model(imgs_tensor)
+                        preds = model(imgs_tensor, num_groups=args.num_groups)
                         end_event.record()
                         torch.cuda.synchronize()
                         elapsed_s = start_event.elapsed_time(end_event) / 1000.0
