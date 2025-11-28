@@ -11,6 +11,7 @@ import numpy as np
 import gradio as gr
 import sys
 import shutil
+import trimesh
 from datetime import datetime
 import glob
 import gc
@@ -281,6 +282,11 @@ def gradio_demo(
         prediction_mode=prediction_mode,
         max_points=3000000,
     )
+    point_count = 0
+    for geom in glbscene.geometry.values():
+        if isinstance(geom, trimesh.points.PointCloud):
+            point_count += geom.vertices.shape[0]
+    print(f"点云点数: {point_count}")
     glbscene.export(file_obj=glbfile)
 
     # Cleanup
