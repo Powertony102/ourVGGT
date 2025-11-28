@@ -220,6 +220,15 @@ def main(args):
                             if torch.is_tensor(cp) and cp.ndim == 2:
                                 cp = cp.unsqueeze(0)
                             view["camera_pose"] = cp.to(device, non_blocking=True)
+                        if "pts3d" in view:
+                            p3d = view["pts3d"]
+                            if isinstance(p3d, np.ndarray):
+                                p3d = torch.from_numpy(p3d.astype(np.float32))
+                            elif not torch.is_tensor(p3d):
+                                p3d = torch.as_tensor(p3d, dtype=torch.float32)
+                            if p3d.ndim == 3:
+                                p3d = p3d.unsqueeze(0)
+                            view["pts3d"] = p3d.to(device, non_blocking=True)
                         if "ray_map" in view:
                             rm = view["ray_map"]
                             if torch.is_tensor(rm):
