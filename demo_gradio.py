@@ -241,7 +241,7 @@ def gradio_demo(
     """
     Perform reconstruction using the already-created target_dir/images.
     """
-    if not os.path.isdir(target_dir) or target_dir == "None":
+    if (not target_dir) or (target_dir == "None") or (not os.path.isdir(target_dir)):
         return None, "No valid target directory found. Please upload first.", None, None
 
     start_time = time.time()
