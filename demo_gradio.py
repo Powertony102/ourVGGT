@@ -279,6 +279,7 @@ def gradio_demo(
         mask_sky=mask_sky,
         target_dir=target_dir,
         prediction_mode=prediction_mode,
+        max_points=3000000,
     )
     glbscene.export(file_obj=glbfile)
 

@@ -25,6 +25,7 @@ def predictions_to_glb(
     mask_sky=False,
     target_dir=None,
     prediction_mode="Predicted Pointmap",
+    max_points=3000000,
 ) -> trimesh.Scene:
     """
     Converts VGGT predictions to a 3D scene represented as a GLB file.
@@ -169,6 +170,13 @@ def predictions_to_glb(
 
     vertices_3d = vertices_3d[conf_mask]
     colors_rgb = colors_rgb[conf_mask]
+
+    if max_points is not None:
+        n = vertices_3d.shape[0]
+        if n > max_points:
+            idx = np.random.choice(n, max_points, replace=False)
+            vertices_3d = vertices_3d[idx]
+            colors_rgb = colors_rgb[idx]
 
     if vertices_3d is None or np.asarray(vertices_3d).size == 0:
         vertices_3d = np.array([[1, 0, 0]])
