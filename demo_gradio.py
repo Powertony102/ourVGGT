@@ -835,3 +835,7 @@ with gr.Blocks(
     )
 
     demo.queue(max_size=20).launch(show_error=True, share=False, server_name="127.0.0.1", server_port=7860)
+"""Sanitize local environment to prevent proxy from hijacking Gradio self-checks"""
+for _k in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+    os.environ.pop(_k, None)
+os.environ.setdefault("NO_PROXY", "127.0.0.1,localhost,::1")
