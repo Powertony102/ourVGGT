@@ -193,6 +193,19 @@ def main(args):
                             if img_t.ndim == 3:
                                 img_t = img_t.unsqueeze(0)
                             view["img"] = img_t.to(device, non_blocking=True)
+                        if "true_shape" in view:
+                            ts = view["true_shape"]
+                            if isinstance(ts, np.ndarray):
+                                ts = torch.from_numpy(ts.astype(np.int32))
+                            elif isinstance(ts, (tuple, list)):
+                                ts = torch.tensor(ts, dtype=torch.int32)
+                            elif torch.is_tensor(ts):
+                                ts = ts.to(torch.int32)
+                            else:
+                                ts = torch.tensor(view["img"].shape[-2:], dtype=torch.int32)
+                            if ts.ndim == 1 and ts.numel() == 2:
+                                ts = ts.unsqueeze(0).repeat(view["img"].shape[0], 1)
+                            view["true_shape"] = ts.to(device, non_blocking=True)
                         if "valid_mask" in view:
                             vm = view["valid_mask"]
                             if isinstance(vm, np.ndarray):
@@ -209,9 +222,27 @@ def main(args):
                             view["camera_pose"] = cp.to(device, non_blocking=True)
                         if "ray_map" in view:
                             rm = view["ray_map"]
-                            if torch.is_tensor(rm) and rm.ndim == 3:
-                                rm = rm.unsqueeze(0)
-                            view["ray_map"] = rm.to(device, non_blocking=True)
+                            if torch.is_tensor(rm):
+                                if rm.ndim == 3:
+                                    if rm.shape[0] == 6:
+                                        rm = rm.permute(1, 2, 0).unsqueeze(0)
+                                    elif rm.shape[-1] == 6:
+                                        rm = rm.unsqueeze(0)
+                                    else:
+                                        rm = rm.unsqueeze(0)
+                                elif rm.ndim == 4:
+                                    if rm.shape[1] == 6:
+                                        rm = rm.permute(0, 2, 3, 1)
+                                view["ray_map"] = rm.to(device, non_blocking=True)
+                            else:
+                                rma = np.asarray(rm)
+                                if rma.ndim == 3 and rma.shape[0] == 6:
+                                    rma = np.transpose(rma, (1, 2, 0))[None]
+                                elif rma.ndim == 3 and rma.shape[-1] == 6:
+                                    rma = rma[None]
+                                else:
+                                    rma = rma[None]
+                                view["ray_map"] = torch.from_numpy(rma.astype(np.float32)).to(device, non_blocking=True)
                         if "img_mask" in view:
                             im = view["img_mask"]
                             if isinstance(im, (bool, np.bool_)):
