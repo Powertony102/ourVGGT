@@ -32,8 +32,8 @@ print("Initializing and loading VGGT model...")
 # model = VGGT()
 # _URL = "https://huggingface.co/facebook/VGGT-1B/resolve/main/model.pt"
 # model.load_state_dict(torch.hub.load_state_dict_from_url(_URL))
-model = VGGT(enable_point=True)
-checkpoint = torch.load("./ckpt/model_tracker_fixed_e20.pt", map_location="cuda")
+model = VGGT(enable_point=True, merging=0)
+checkpoint = torch.load("/root/autodl-tmp/models/model_tracker_fixed_e20.pt", map_location="cuda")
 missing, unexpected = model.load_state_dict(checkpoint, strict=False)
 if missing or unexpected:
     print(f"Warning: Missing keys: {missing}")
@@ -97,7 +97,7 @@ def run_model(target_dir, model) -> dict:
         _start.record()
         with torch.no_grad():
             with torch.cuda.amp.autocast(dtype=dtype):
-                predictions = model(images)
+                predictions = model(images, num_groups=5)
         _end.record()
         torch.cuda.synchronize()
         infer_ms = _start.elapsed_time(_end)
