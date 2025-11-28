@@ -543,7 +543,7 @@ with gr.Blocks(
                 with gr.Row():
                     record_start_btn = gr.Button("start", scale=1, variant="secondary")
                     record_stop_btn = gr.Button("stop", scale=1, variant="secondary")
-                record_zip_file = gr.File(label="Recording ZIP", show_download_button=True)
+                record_zip_file = gr.File(label="Recording ZIP")
                 record_frames_json = gr.Textbox(label="record_frames_json", visible=False)
 
             with gr.Row():
