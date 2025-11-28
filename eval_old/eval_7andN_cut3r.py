@@ -188,17 +188,50 @@ def main(args):
                         ]
                     )
                     for view in batch:
-                        for name in view.keys():  # pseudo_focal
-                            if name in ignore_keys:
-                                continue
-                            if isinstance(view[name], tuple) or isinstance(
-                                view[name], list
-                            ):
-                                view[name] = [
-                                    x.to(device, non_blocking=True) for x in view[name]
-                                ]
-                            else:
-                                view[name] = view[name].to(device, non_blocking=True)
+                        img_t = view.get("img", None)
+                        if torch.is_tensor(img_t):
+                            if img_t.ndim == 3:
+                                img_t = img_t.unsqueeze(0)
+                            view["img"] = img_t.to(device, non_blocking=True)
+                        if "valid_mask" in view:
+                            vm = view["valid_mask"]
+                            if isinstance(vm, np.ndarray):
+                                vm = torch.from_numpy(vm.astype(np.bool_))
+                            if torch.is_tensor(vm) and vm.ndim == 2:
+                                vm = vm.unsqueeze(0)
+                            view["valid_mask"] = vm.to(device, non_blocking=True)
+                        if "camera_pose" in view:
+                            cp = view["camera_pose"]
+                            if isinstance(cp, np.ndarray):
+                                cp = torch.from_numpy(cp.astype(np.float32))
+                            if torch.is_tensor(cp) and cp.ndim == 2:
+                                cp = cp.unsqueeze(0)
+                            view["camera_pose"] = cp.to(device, non_blocking=True)
+                        if "ray_map" in view:
+                            rm = view["ray_map"]
+                            if torch.is_tensor(rm) and rm.ndim == 3:
+                                rm = rm.unsqueeze(0)
+                            view["ray_map"] = rm.to(device, non_blocking=True)
+                        if "img_mask" in view:
+                            im = view["img_mask"]
+                            if isinstance(im, (bool, np.bool_)):
+                                im = torch.tensor(im).unsqueeze(0)
+                            view["img_mask"] = im.to(device, non_blocking=True)
+                        if "ray_mask" in view:
+                            rmask = view["ray_mask"]
+                            if isinstance(rmask, (bool, np.bool_)):
+                                rmask = torch.tensor(rmask).unsqueeze(0)
+                            view["ray_mask"] = rmask.to(device, non_blocking=True)
+                        if "reset" in view:
+                            r = view["reset"]
+                            if isinstance(r, (bool, np.bool_)):
+                                r = torch.tensor(r).unsqueeze(0)
+                            view["reset"] = r.to(device, non_blocking=True)
+                        if "update" in view:
+                            u = view["update"]
+                            if isinstance(u, (bool, np.bool_)):
+                                u = torch.tensor(u).unsqueeze(0)
+                            view["update"] = u.to(device, non_blocking=True)
                     for view in batch:
                         for k, v in list(view.items()):
                             if torch.is_tensor(v) and torch.is_floating_point(v):
