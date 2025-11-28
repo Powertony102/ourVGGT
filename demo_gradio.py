@@ -43,6 +43,12 @@ if missing or unexpected:
 model.eval()
 model = model.to(device)
 
+cap = torch.cuda.get_device_capability() if torch.cuda.is_available() else (0, 0)
+INFER_DTYPE = torch.bfloat16 if cap[0] >= 8 else torch.float16
+if torch.cuda.is_available() and INFER_DTYPE is torch.bfloat16:
+    model = model.to(torch.bfloat16)
+print(f"Inference dtype: {'bf16' if INFER_DTYPE is torch.bfloat16 else 'fp16'}")
+
 
 # -------------------------------------------------------------------------
 # 1) Core model inference
@@ -82,11 +88,30 @@ def run_model(target_dir, model) -> dict:
     # Run inference
     print("Running inference...")
     # dtype = torch.bfloat16 if torch.cuda.get_device_capability()[0] >= 8 else torch.float16
-    dtype = torch.float16
+    dtype = INFER_DTYPE
 
-    with torch.no_grad():
-        with torch.cuda.amp.autocast(dtype=dtype):
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        _start = torch.cuda.Event(enable_timing=True)
+        _end = torch.cuda.Event(enable_timing=True)
+        _start.record()
+        with torch.no_grad():
+            with torch.cuda.amp.autocast(dtype=dtype):
+                predictions = model(images)
+        _end.record()
+        torch.cuda.synchronize()
+        infer_ms = _start.elapsed_time(_end)
+        num_imgs = int(images.shape[0])
+        fps = (num_imgs * 1000.0) / max(infer_ms, 1e-6)
+        print(f"Inference GPU time: {infer_ms:.2f} ms | Frames: {num_imgs} | FPS: {fps:.2f}")
+    else:
+        t0 = time.perf_counter()
+        with torch.no_grad():
             predictions = model(images)
+        infer_ms = (time.perf_counter() - t0) * 1000.0
+        num_imgs = int(images.shape[0])
+        fps = (num_imgs * 1000.0) / max(infer_ms, 1e-6)
+        print(f"Inference CPU time: {infer_ms:.2f} ms | Frames: {num_imgs} | FPS: {fps:.2f}")
 
     # Convert pose encoding to extrinsic and intrinsic matrices
     print("Converting pose encoding to extrinsic and intrinsic matrices...")
