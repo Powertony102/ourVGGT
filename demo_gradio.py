@@ -284,9 +284,12 @@ def gradio_demo(
         max_points=max_points,
     )
     point_count = 0
-    for geom in glbscene.geometry.values():
-        if isinstance(geom, trimesh.points.PointCloud):
-            point_count += geom.vertices.shape[0]
+    if hasattr(glbscene, "geometry"):
+        for geom in glbscene.geometry.values():
+            if isinstance(geom, trimesh.points.PointCloud):
+                point_count += geom.vertices.shape[0]
+    elif hasattr(glbscene, "vertices"):
+        point_count = int(np.asarray(glbscene.vertices).shape[0])
     print(f"点云点数: {point_count}")
     glbscene.export(file_obj=glbfile)
 
