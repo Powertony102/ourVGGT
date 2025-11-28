@@ -931,7 +931,7 @@ with gr.Blocks(
         fn=lambda x: None,
         inputs=[target_dir_output],
         outputs=[],
-        _js="""
+        js="""
         (target_dir)=>{
             const viewer = document.getElementById('recon_viewer');
             if (!viewer) { alert('Viewer not ready'); return []; }
@@ -959,7 +959,7 @@ with gr.Blocks(
         fn=save_recording_zip_fn,
         inputs=[target_dir_output, record_frames_json],
         outputs=[record_zip_file],
-        _js="""
+        js="""
         (target_dir, frames_json)=>{
             if (window.__rec_timer) { clearInterval(window.__rec_timer); window.__rec_timer = null; }
             const frames = Array.isArray(window.__rec_frames) ? window.__rec_frames : [];
