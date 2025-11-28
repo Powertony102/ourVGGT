@@ -119,10 +119,12 @@ def run_model(target_dir, model) -> dict:
     predictions["extrinsic"] = extrinsic
     predictions["intrinsic"] = intrinsic
 
-    # Convert tensors to numpy
-    for key in predictions.keys():
-        if isinstance(predictions[key], torch.Tensor):
-            predictions[key] = predictions[key].cpu().numpy().squeeze(0)  # remove batch dimension
+    for key, val in list(predictions.items()):
+        if isinstance(val, torch.Tensor):
+            t = val.detach().cpu()
+            if t.dtype == torch.bfloat16:
+                t = t.to(torch.float32)
+            predictions[key] = t.numpy().squeeze(0)
     predictions['pose_enc_list'] = None # remove pose_enc_list
 
     # Generate world points from depth map
