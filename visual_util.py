@@ -13,6 +13,8 @@ import copy
 import cv2
 import os
 import requests
+import json
+import struct
 
 
 def predictions_to_glb(
@@ -159,13 +161,17 @@ def predictions_to_glb(
     conf_mask = (conf >= conf_threshold) & (conf > 1e-5)
 
     if mask_black_bg:
-        black_bg_mask = colors_rgb.sum(axis=1) >= 16
+        black_bg_mask = colors_rgb.sum(axis=1) >= (16.0 / 255.0)
         conf_mask = conf_mask & black_bg_mask
 
     if mask_white_bg:
         # Filter out white background pixels (RGB values close to white)
         # Consider pixels white if all RGB values are above 240
-        white_bg_mask = ~((colors_rgb[:, 0] > 240) & (colors_rgb[:, 1] > 240) & (colors_rgb[:, 2] > 240))
+        white_bg_mask = ~(
+            (colors_rgb[:, 0] > (240.0 / 255.0))
+            & (colors_rgb[:, 1] > (240.0 / 255.0))
+            & (colors_rgb[:, 2] > (240.0 / 255.0))
+        )
         conf_mask = conf_mask & white_bg_mask
 
     vertices_3d = vertices_3d[conf_mask]
@@ -192,35 +198,108 @@ def predictions_to_glb(
 
     colormap = matplotlib.colormaps.get_cmap("gist_rainbow")
 
-    # Initialize a 3D scene
-    scene_3d = trimesh.Scene()
-
-    # Add point cloud data to the scene
-    point_cloud_data = trimesh.PointCloud(vertices=vertices_3d, colors=colors_rgb)
-
-    scene_3d.add_geometry(point_cloud_data)
-
-    # Prepare 4x4 matrices for camera extrinsics
     num_cameras = len(camera_matrices)
     extrinsics_matrices = np.zeros((num_cameras, 4, 4))
     extrinsics_matrices[:, :3, :4] = camera_matrices
     extrinsics_matrices[:, 3, 3] = 1
 
+    use_unlit_points = vertices_3d.shape[0] > 1500000
+
+    if use_unlit_points:
+        opengl_conversion_matrix = get_opengl_conversion_matrix()
+        align_rotation = np.eye(4)
+        align_rotation[:3, :3] = Rotation.from_euler("y", 180, degrees=True).as_matrix()
+        initial_transformation = np.linalg.inv(extrinsics_matrices[0]) @ opengl_conversion_matrix @ align_rotation
+        verts_aligned = transform_points(initial_transformation, vertices_3d)
+        scene_obj = SimpleGLBScene("unlit_points_glb", vertices=verts_aligned.astype(np.float32), colors=colors_rgb.astype(np.float32))
+        print("GLB Scene built (POINTS+unlit)")
+        return scene_obj
+
+    scene_3d = trimesh.Scene()
+    point_cloud_data = trimesh.PointCloud(vertices=vertices_3d, colors=colors_rgb)
+    scene_3d.add_geometry(point_cloud_data)
+
     if show_cam:
-        # Add camera models to the scene
         for i in range(num_cameras):
             world_to_camera = extrinsics_matrices[i]
             camera_to_world = np.linalg.inv(world_to_camera)
             rgba_color = colormap(i / num_cameras)
             current_color = tuple(int(255 * x) for x in rgba_color[:3])
-
             integrate_camera_into_scene(scene_3d, camera_to_world, current_color, scene_scale)
 
-    # Align scene to the observation of the first camera
     scene_3d = apply_scene_alignment(scene_3d, extrinsics_matrices)
-
     print("GLB Scene built")
     return scene_3d
+
+
+class SimpleGLBScene:
+    def __init__(self, mode, trimesh_scene=None, vertices=None, colors=None):
+        self.mode = mode
+        self.trimesh_scene = trimesh_scene
+        self.vertices = vertices
+        self.colors = colors
+
+    def export(self, file_obj):
+        if self.mode == "trimesh" and self.trimesh_scene is not None:
+            return self.trimesh_scene.export(file_obj=file_obj)
+        if self.mode == "unlit_points_glb":
+            data = build_unlit_points_glb_bytes(self.vertices, self.colors)
+            with open(file_obj, "wb") as f:
+                f.write(data)
+            return file_obj
+        raise ValueError("Invalid GLB scene mode")
+
+
+def build_unlit_points_glb_bytes(vertices, colors):
+    positions = np.asarray(vertices, dtype=np.float32)
+    cols = np.asarray(colors, dtype=np.float32)
+    n = positions.shape[0]
+    pos_bytes = positions.tobytes()
+    col_bytes = cols.tobytes()
+    bin_data = pos_bytes + col_bytes
+    pos_len = len(pos_bytes)
+    col_off = pos_len
+    col_len = len(col_bytes)
+    pos_min = positions.min(axis=0).tolist()
+    pos_max = positions.max(axis=0).tolist()
+    gltf = {
+        "asset": {"version": "2.0", "generator": "OurVGGT"},
+        "extensionsUsed": ["KHR_materials_unlit"],
+        "buffers": [{"byteLength": len(bin_data)}],
+        "bufferViews": [
+            {"buffer": 0, "byteOffset": 0, "byteLength": pos_len, "target": 34962},
+            {"buffer": 0, "byteOffset": col_off, "byteLength": col_len, "target": 34962},
+        ],
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": n,
+                "type": "VEC3",
+                "min": pos_min,
+                "max": pos_max,
+            },
+            {"bufferView": 1, "componentType": 5126, "count": n, "type": "VEC3"},
+        ],
+        "materials": [{"extensions": {"KHR_materials_unlit": {}}, "doubleSided": True, "alphaMode": "OPAQUE"}],
+        "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "COLOR_0": 1}, "mode": 0, "material": 0}]}],
+        "nodes": [{"mesh": 0}],
+        "scenes": [{"nodes": [0]}],
+        "scene": 0,
+    }
+    json_str = json.dumps(gltf, separators=(",", ":"))
+    json_bytes = json_str.encode("utf-8")
+    def pad4(b):
+        pad = (4 - (len(b) % 4)) % 4
+        return b + (b" " * pad)
+    json_padded = pad4(json_bytes)
+    bin_padded = pad4(bin_data)
+    total_length = 12 + 8 + len(json_padded) + 8 + len(bin_padded)
+    header = struct.pack("<4sII", b"glTF", 2, total_length)
+    json_header = struct.pack("<I4s", len(json_padded), b"JSON")
+    bin_header = struct.pack("<I4s", len(bin_padded), b"BIN\x00")
+    glb = header + json_header + json_padded + bin_header + bin_padded
+    return glb
 
 
 def integrate_camera_into_scene(scene: trimesh.Scene, transform: np.ndarray, face_colors: tuple, scene_scale: float):
