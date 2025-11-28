@@ -43,7 +43,7 @@ def get_args_parser():
     parser.add_argument(
         "--weights",
         type=str,
-        default="",
+        default=os.path.join("CUT3R", "src", "cut3r_512_dpt_4_64.pth"),
         help="ckpt name",
     )
     parser.add_argument("--device", type=str, default="cuda:0", help="device")
@@ -60,12 +60,26 @@ def get_args_parser():
     parser.add_argument("--size", type=int, default=512)
     parser.add_argument("--revisit", type=int, default=1, help="revisit times")
     parser.add_argument("--freeze", action="store_true")
+    parser.add_argument(
+        "--input_frame",
+        type=int,
+        default=200,
+        help="Maximum number of frames selected for processing per scene",
+    )
     return parser
 
 
 def main(args):
     from CUT3R.add_ckpt_path import add_path_to_dust3r
-    add_path_to_dust3r(args.weights)
+    from pathlib import Path
+    from vggt.utils.eval_utils import build_frame_selection
+    if not args.weights:
+        args.weights = os.path.join("CUT3R", "src", "cut3r_512_dpt_4_64.pth")
+    looks_like_local = os.path.isabs(args.weights) or args.weights.startswith('.') or args.weights.endswith('.pth')
+    if looks_like_local and not os.path.exists(args.weights):
+        raise FileNotFoundError(f"Checkpoint not found: {args.weights}")
+    if looks_like_local and os.path.exists(args.weights):
+        add_path_to_dust3r(args.weights)
     from mv_recon.data import SevenScenes, NRGBD
     from mv_recon.utils import accuracy, completion
 
@@ -136,7 +150,32 @@ def main(args):
 
             with accelerator.split_between_processes(list(range(len(dataset)))) as idxs:
                 for data_idx in tqdm(idxs):
-                    batch = default_collate([dataset[data_idx]])
+                    full_views = dataset[data_idx]
+                    views = full_views if isinstance(full_views, list) else [full_views]
+
+                    image_paths = []
+                    available_pose_frame_ids = []
+                    for i, v in enumerate(views):
+                        label = v.get("label", None)
+                        frame_id = None
+                        if isinstance(label, str):
+                            try:
+                                frame_id_str = label.rsplit("/", 1)[-1]
+                                frame_id = int(frame_id_str.lstrip("0") or "0")
+                            except Exception:
+                                frame_id = None
+                        if frame_id is None:
+                            frame_id = i
+                        available_pose_frame_ids.append(frame_id)
+                        image_paths.append(Path(f"{frame_id:06d}"))
+
+                    selected_frame_ids, selected_image_paths, selected_pose_indices = build_frame_selection(
+                        image_paths, np.array(available_pose_frame_ids), args.input_frame
+                    )
+                    batch = [views[i] for i in selected_pose_indices if i < len(views)]
+                    if len(batch) == 0:
+                        print(f"No frames selected for {name_data} idx={data_idx}, skipping")
+                        continue
                     ignore_keys = set(
                         [
                             "depthmap",
@@ -279,7 +318,11 @@ def main(args):
                     pts_gt_all = np.concatenate(pts_gt_all, axis=0)
                     masks_all = np.concatenate(masks_all, axis=0)
 
-                    scene_id = view["label"][0].rsplit("/", 1)[0]
+                    scene_label = batch[0]["label"]
+                    try:
+                        scene_id = (scene_label[0] if isinstance(scene_label, (list, tuple)) else scene_label).rsplit("/", 1)[0]
+                    except Exception:
+                        scene_id = str(scene_label)
 
                     if "DTU" in name_data:
                         threshold = 100
