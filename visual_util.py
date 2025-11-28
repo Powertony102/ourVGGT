@@ -148,6 +148,8 @@ def predictions_to_glb(
     else:  # Assume already in NHWC format
         colors_rgb = images
     colors_rgb = (colors_rgb.reshape(-1, 3) * 255).astype(np.uint8)
+    alpha = np.full((colors_rgb.shape[0], 1), 255, dtype=np.uint8)
+    colors_rgba = np.concatenate([colors_rgb, alpha], axis=1)
 
     conf = pred_world_points_conf.reshape(-1)
     # Convert percentage threshold to actual confidence value
@@ -196,7 +198,7 @@ def predictions_to_glb(
     scene_3d = trimesh.Scene()
 
     # Add point cloud data to the scene
-    point_cloud_data = trimesh.PointCloud(vertices=vertices_3d, colors=colors_rgb)
+    point_cloud_data = trimesh.PointCloud(vertices=vertices_3d, colors=colors_rgba)
 
     scene_3d.add_geometry(point_cloud_data)
 
