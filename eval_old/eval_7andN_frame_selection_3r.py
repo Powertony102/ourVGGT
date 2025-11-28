@@ -155,7 +155,7 @@ def main(args):
             raise ImportError(f"Failed to import CUT3R modules: {e}")
         device_obj = torch.device(args.device)
         model = ARCroco3DStereo.from_pretrained(args.cut3r_model_path)
-        model = model.to(device_obj).to(torch.bfloat16).eval()
+        model = model.to(device_obj).to(torch.float32).eval()
         cut3r_ctx = {"inference": cut3r_inference, "load_images": cut3r_load_images, "device": device_obj}
         try:
             p = next(model.parameters())
@@ -383,19 +383,19 @@ def main(args):
                                     break
                                 img_paths.append(resolved)
                             if all_resolved:
-                                images = cut3r_ctx["load_images"](img_paths, size=args.size)
+                                images = cut3r_ctx["load_images"](img_paths, size=args.size, verbose=False)
                                 cut3r_views = []
                                 for i in range(len(images)):
-                                    img = images[i]["img"].to(torch.bfloat16)
+                                    img = images[i]["img"].to(cut3r_ctx["device"], dtype=torch.float32)
                                     true_shape = torch.from_numpy(images[i]["true_shape"]).to(img.device)
                                     cut3r_views.append(
                                         {
                                             "img": img,
-                                            "ray_map": torch.full((img.shape[0], img.shape[-2], img.shape[-1], 6), torch.nan, device=img.device, dtype=torch.bfloat16),
+                                            "ray_map": torch.full((img.shape[0], img.shape[-2], img.shape[-1], 6), torch.nan, device=img.device, dtype=torch.float32),
                                             "true_shape": true_shape,
                                             "idx": i,
                                             "instance": str(i),
-                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device).to(torch.bfloat16),
+                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device).to(torch.float32),
                                             "img_mask": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "ray_mask": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "update": torch.tensor(True, device=img.device).unsqueeze(0),
@@ -405,28 +405,27 @@ def main(args):
                             else:
                                 cut3r_views = []
                                 for i, v in enumerate(views):
-                                    img = v["img"].to(torch.bfloat16)
+                                    img = v["img"].to(cut3r_ctx["device"], dtype=torch.float32)
                                     true_shape = torch.tensor([img.shape[-2], img.shape[-1]], dtype=torch.int32, device=img.device)
                                     cut3r_views.append(
                                         {
                                             "img": img,
-                                            "ray_map": torch.full((img.shape[0], img.shape[-2], img.shape[-1], 6), torch.nan, device=img.device, dtype=torch.bfloat16),
+                                            "ray_map": torch.full((img.shape[0], img.shape[-2], img.shape[-1], 6), torch.nan, device=img.device, dtype=torch.float32),
                                             "true_shape": true_shape,
                                             "idx": i,
                                             "instance": str(i),
-                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device).to(torch.bfloat16),
+                                            "camera_pose": torch.from_numpy(np.eye(4, dtype=np.float32)).unsqueeze(0).to(img.device).to(torch.float32),
                                             "img_mask": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "ray_mask": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "update": torch.tensor(True, device=img.device).unsqueeze(0),
                                             "reset": torch.tensor(False, device=img.device).unsqueeze(0),
                                         }
                                     )
-                            with torch.cuda.amp.autocast(enabled=True, dtype=torch.bfloat16):
-                                torch.cuda.synchronize()
-                                start = time.time()
-                                output = model(cut3r_views)
-                                torch.cuda.synchronize()
-                                end = time.time()
+                            torch.cuda.synchronize()
+                            start = time.time()
+                            output = model(cut3r_views)
+                            torch.cuda.synchronize()
+                            end = time.time()
                             outputs = {"pred": output.ress, "views": output.views}
                             elapsed_s = end - start
                             frame_count = len(cut3r_views)
