@@ -148,9 +148,9 @@ def main(args):
         try:
             from CUT3R.add_ckpt_path import add_path_to_dust3r
             add_path_to_dust3r(args.cut3r_model_path)
-            from src.dust3r.model import ARCroco3DStereo
-            from src.dust3r.inference import inference as cut3r_inference
-            from src.dust3r.utils.image import load_images as cut3r_load_images
+            from dust3r.model import ARCroco3DStereo
+            from dust3r.inference import inference as cut3r_inference
+            from dust3r.utils.image import load_images as cut3r_load_images
         except Exception as e:
             raise ImportError(f"Failed to import CUT3R modules: {e}")
         device_obj = torch.device(args.device)
@@ -449,8 +449,19 @@ def main(args):
                         else:
                             fast3r_views = []
                             for v in views:
-                                img_batched = v["img"].to(torch.bfloat16)
-                                true_shape_batched = v.get("true_shape")
+                                img = v["img"]
+                                if img.ndim == 3:
+                                    img = img.unsqueeze(0)
+                                img_batched = img.to(device_obj, dtype=torch.bfloat16)
+                                ts = v.get("true_shape")
+                                if ts is None:
+                                    true_shape_batched = torch.tensor([img_batched.shape[-2], img_batched.shape[-1]], dtype=torch.int32, device=device_obj).unsqueeze(0)
+                                else:
+                                    if isinstance(ts, np.ndarray):
+                                        ts = torch.from_numpy(ts)
+                                    true_shape_batched = ts.to(device_obj)
+                                    if true_shape_batched.ndim == 1:
+                                        true_shape_batched = true_shape_batched.unsqueeze(0)
                                 idx_val = v.get("idx", 0)
                                 if torch.is_tensor(idx_val):
                                     idx_val = int(idx_val.item())
