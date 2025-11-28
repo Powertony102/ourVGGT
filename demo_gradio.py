@@ -234,6 +234,7 @@ def gradio_demo(
     show_cam=True,
     mask_sky=False,
     prediction_mode="Pointmap Regression",
+    max_points=1500000,
 ):
     """
     Perform reconstruction using the already-created target_dir/images.
@@ -280,7 +281,7 @@ def gradio_demo(
         mask_sky=mask_sky,
         target_dir=target_dir,
         prediction_mode=prediction_mode,
-        max_points=3000000,
+        max_points=max_points,
     )
     point_count = 0
     for geom in glbscene.geometry.values():
@@ -321,7 +322,7 @@ def update_log():
 
 
 def update_visualization(
-    target_dir, conf_thres, frame_filter, mask_black_bg, mask_white_bg, show_cam, mask_sky, prediction_mode, is_example
+    target_dir, conf_thres, frame_filter, mask_black_bg, mask_white_bg, show_cam, mask_sky, prediction_mode, is_example, max_points
 ):
     """
     Reload saved predictions from npz, create (or reuse) the GLB for new parameters,
@@ -370,6 +371,7 @@ def update_visualization(
             mask_sky=mask_sky,
             target_dir=target_dir,
             prediction_mode=prediction_mode,
+            max_points=max_points,
         )
         glbscene.export(file_obj=glbfile)
 
@@ -557,6 +559,7 @@ with gr.Blocks(
                 mask_sky = gr.Checkbox(label="Filter Sky", value=False)
                 mask_black_bg = gr.Checkbox(label="Filter Black Background", value=False)
                 mask_white_bg = gr.Checkbox(label="Filter White Background", value=False)
+            max_points_viz = gr.Slider(minimum=100000, maximum=5000000, value=1500000, step=100000, label="Max Points for View")
 
         with gr.Row():
             render_frame = gr.Dropdown(choices=["All"], value="All", label="Render From Frame")
@@ -642,6 +645,7 @@ with gr.Blocks(
             show_cam,
             mask_sky,
             prediction_mode,
+            max_points_viz,
         ],
         outputs=[reconstruction_output, log_output, frame_filter, render_frame],
     ).then(
@@ -663,6 +667,7 @@ with gr.Blocks(
             mask_sky,
             prediction_mode,
             is_example,
+            max_points_viz,
         ],
         [reconstruction_output, log_output],
     )
@@ -678,6 +683,7 @@ with gr.Blocks(
             mask_sky,
             prediction_mode,
             is_example,
+            max_points_viz,
         ],
         [reconstruction_output, log_output],
     )
@@ -693,6 +699,7 @@ with gr.Blocks(
             mask_sky,
             prediction_mode,
             is_example,
+            max_points_viz,
         ],
         [reconstruction_output, log_output],
     )
@@ -708,6 +715,7 @@ with gr.Blocks(
             mask_sky,
             prediction_mode,
             is_example,
+            max_points_viz,
         ],
         [reconstruction_output, log_output],
     )
@@ -723,6 +731,7 @@ with gr.Blocks(
             mask_sky,
             prediction_mode,
             is_example,
+            max_points_viz,
         ],
         [reconstruction_output, log_output],
     )
@@ -738,6 +747,7 @@ with gr.Blocks(
             mask_sky,
             prediction_mode,
             is_example,
+            max_points_viz,
         ],
         [reconstruction_output, log_output],
     )
@@ -753,6 +763,7 @@ with gr.Blocks(
             mask_sky,
             prediction_mode,
             is_example,
+            max_points_viz,
         ],
         [reconstruction_output, log_output],
     )
