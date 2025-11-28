@@ -16,6 +16,8 @@ from datetime import datetime
 import glob
 import gc
 import time
+import base64
+import zipfile
 
 sys.path.append("vggt/")
 
@@ -538,6 +540,12 @@ with gr.Blocks(
                     """
                 )
 
+                with gr.Row():
+                    record_start_btn = gr.Button("start", scale=1, variant="secondary")
+                    record_stop_btn = gr.Button("stop", scale=1, variant="secondary")
+                record_zip_file = gr.File(label="Recording ZIP", show_download_button=True)
+                record_frames_json = gr.Textbox(label="record_frames_json", visible=False)
+
             with gr.Row():
                 submit_btn = gr.Button("Reconstruct", scale=1, variant="primary")
                 clear_btn = gr.ClearButton(
@@ -880,6 +888,85 @@ with gr.Blocks(
             prediction_mode,
         ],
         outputs=[rendered_image],
+    )
+
+    def save_recording_zip_fn(target_dir, frames_json):
+        if not target_dir or target_dir == "None" or not os.path.isdir(target_dir):
+            return None
+        try:
+            import json
+            frames = json.loads(frames_json) if isinstance(frames_json, str) and len(frames_json) > 0 else []
+            if len(frames) == 0:
+                return None
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            img_dir = os.path.join(target_dir, "images")
+            rec_dir = os.path.join(img_dir, f"recording_{ts}")
+            os.makedirs(rec_dir, exist_ok=True)
+            paths = []
+            for i, data_url in enumerate(frames):
+                if not isinstance(data_url, str):
+                    continue
+                comma_idx = data_url.find(",")
+                b64 = data_url[comma_idx + 1:] if comma_idx != -1 else data_url
+                try:
+                    data = base64.b64decode(b64)
+                except Exception:
+                    continue
+                fname = os.path.join(rec_dir, f"frame_{i:06d}.jpg")
+                with open(fname, "wb") as f:
+                    f.write(data)
+                paths.append(fname)
+            if len(paths) == 0:
+                return None
+            zip_path = os.path.join(img_dir, f"recording_{ts}.zip")
+            with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+                for p in paths:
+                    arcname = os.path.relpath(p, img_dir)
+                    zf.write(p, arcname)
+            return zip_path
+        except Exception:
+            return None
+
+    record_start_btn.click(
+        fn=lambda x: None,
+        inputs=[target_dir_output],
+        outputs=[],
+        _js="""
+        (target_dir)=>{
+            const viewer = document.getElementById('recon_viewer');
+            if (!viewer) { alert('Viewer not ready'); return []; }
+            let canvas = viewer.querySelector('canvas');
+            const mv = viewer.querySelector('model-viewer');
+            if (!canvas && mv && mv.shadowRoot) {
+                canvas = mv.shadowRoot.querySelector('canvas');
+            }
+            if (!canvas) { alert('Canvas not found'); return []; }
+            window.__rec_frames = [];
+            const capture = ()=>{
+                try {
+                    const url = canvas.toDataURL('image/jpeg', 0.9);
+                    window.__rec_frames.push(url);
+                } catch (e) {}
+            };
+            if (window.__rec_timer) clearInterval(window.__rec_timer);
+            window.__rec_timer = setInterval(capture, 1000/30);
+            return [target_dir];
+        }
+        """
+    )
+
+    record_stop_btn.click(
+        fn=save_recording_zip_fn,
+        inputs=[target_dir_output, record_frames_json],
+        outputs=[record_zip_file],
+        _js="""
+        (target_dir, frames_json)=>{
+            if (window.__rec_timer) { clearInterval(window.__rec_timer); window.__rec_timer = null; }
+            const frames = Array.isArray(window.__rec_frames) ? window.__rec_frames : [];
+            window.__rec_frames = [];
+            return [target_dir, JSON.stringify(frames)];
+        }
+        """
     )
 
     demo.queue(max_size=20).launch(show_error=True, share=False, server_name="127.0.0.1", server_port=7860)
