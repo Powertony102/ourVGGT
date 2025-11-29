@@ -529,15 +529,12 @@ with gr.Blocks(
                                 off.width = canvas.width; off.height = canvas.height;
                                 const ctx = off.getContext('2d');
                                 ctx.drawImage(canvas, 0, 0);
-                                ctx.globalCompositeOperation = 'destination-over';
-                                ctx.fillStyle = '#ffffff';
-                                ctx.fillRect(0, 0, off.width, off.height);
                                 try {
                                     const imgData = ctx.getImageData(0, 0, off.width, off.height);
-                                    const data = imgData.data; const thr = 8;
+                                    const data = imgData.data;
                                     for (let i = 0; i < data.length; i += 4) {
                                         const r = data[i], g = data[i+1], b = data[i+2];
-                                        if (r < thr && g < thr && b < thr) { data[i] = 255; data[i+1] = 255; data[i+2] = 255; }
+                                        if (r === 0 && g === 0 && b === 0) { data[i+3] = 0; }
                                     }
                                     ctx.putImageData(imgData, 0, 0);
                                 } catch (e) {}
@@ -924,11 +921,13 @@ with gr.Blocks(
                     continue
                 comma_idx = data_url.find(",")
                 b64 = data_url[comma_idx + 1:] if comma_idx != -1 else data_url
+                mime = data_url[:comma_idx] if comma_idx != -1 else ""
                 try:
                     data = base64.b64decode(b64)
                 except Exception:
                     continue
-                fname = os.path.join(rec_dir, f"frame_{i:06d}.jpg")
+                ext = ".png" if "image/png" in mime else ".jpg"
+                fname = os.path.join(rec_dir, f"frame_{i:06d}{ext}")
                 with open(fname, "wb") as f:
                     f.write(data)
                 paths.append(fname)
@@ -964,19 +963,16 @@ with gr.Blocks(
                     off.width = canvas.width; off.height = canvas.height;
                     const ctx = off.getContext('2d');
                     ctx.drawImage(canvas, 0, 0);
-                    ctx.globalCompositeOperation = 'destination-over';
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fillRect(0, 0, off.width, off.height);
                     try {
                         const imgData = ctx.getImageData(0, 0, off.width, off.height);
-                        const data = imgData.data; const thr = 8;
+                        const data = imgData.data;
                         for (let i = 0; i < data.length; i += 4) {
                             const r = data[i], g = data[i+1], b = data[i+2];
-                            if (r < thr && g < thr && b < thr) { data[i] = 255; data[i+1] = 255; data[i+2] = 255; }
+                            if (r === 0 && g === 0 && b === 0) { data[i+3] = 0; }
                         }
                         ctx.putImageData(imgData, 0, 0);
                     } catch (e) {}
-                    const url = off.toDataURL('image/jpeg', 0.9);
+                    const url = off.toDataURL('image/png');
                     window.__rec_frames.push(url);
                 } catch (e) {}
             };
