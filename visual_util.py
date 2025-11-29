@@ -203,17 +203,7 @@ def predictions_to_glb(
     extrinsics_matrices[:, :3, :4] = camera_matrices
     extrinsics_matrices[:, 3, 3] = 1
 
-    use_unlit_points = vertices_3d.shape[0] > 1500000
-
-    if use_unlit_points:
-        opengl_conversion_matrix = get_opengl_conversion_matrix()
-        align_rotation = np.eye(4)
-        align_rotation[:3, :3] = Rotation.from_euler("y", 180, degrees=True).as_matrix()
-        initial_transformation = np.linalg.inv(extrinsics_matrices[0]) @ opengl_conversion_matrix @ align_rotation
-        verts_aligned = transform_points(initial_transformation, vertices_3d)
-        scene_obj = SimpleGLBScene("unlit_points_glb", vertices=verts_aligned.astype(np.float32), colors=colors_rgb.astype(np.float32))
-        print("GLB Scene built (POINTS+unlit)")
-        return scene_obj
+    use_unlit_points = False
 
     scene_3d = trimesh.Scene()
     point_cloud_data = trimesh.PointCloud(vertices=vertices_3d, colors=colors_rgb)

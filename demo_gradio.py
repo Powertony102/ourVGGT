@@ -579,7 +579,7 @@ with gr.Blocks(
                 mask_sky = gr.Checkbox(label="Filter Sky", value=False)
                 mask_black_bg = gr.Checkbox(label="Filter Black Background", value=False)
                 mask_white_bg = gr.Checkbox(label="Filter White Background", value=False)
-            max_points_viz = gr.Slider(minimum=100000, maximum=5000000, value=3000000, step=100000, label="Max Points for View")
+            max_points_viz = gr.Slider(minimum=100000, maximum=8000000, value=1000000, step=100000, label="Max Points for View")
 
         with gr.Row():
             render_frame = gr.Dropdown(choices=["All"], value="All", label="Render From Frame")
