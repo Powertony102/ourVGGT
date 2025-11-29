@@ -809,12 +809,12 @@ with gr.Blocks(
         outputs=[reconstruction_output, target_dir_output, image_gallery, log_output],
     )
 
-        def render_view_fn(target_dir, render_frame, conf_thres, mask_black_bg, mask_white_bg, show_cam, mask_sky, prediction_mode):
-            if not target_dir or target_dir == "None" or not os.path.isdir(target_dir):
-                return None
-            predictions_path = os.path.join(target_dir, "predictions.npz")
-            if not os.path.exists(predictions_path):
-                return None
+    def render_view_fn(target_dir, render_frame, conf_thres, mask_black_bg, mask_white_bg, show_cam, mask_sky, prediction_mode):
+        if not target_dir or target_dir == "None" or not os.path.isdir(target_dir):
+            return None
+        predictions_path = os.path.join(target_dir, "predictions.npz")
+        if not os.path.exists(predictions_path):
+            return None
         loaded = np.load(predictions_path)
         keys = [
             "pose_enc",
