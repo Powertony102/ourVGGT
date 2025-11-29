@@ -525,7 +525,23 @@ with gr.Blocks(
                             }
                             if (!canvas) { alert('Canvas not found'); return; }
                             try {
-                                const url = canvas.toDataURL('image/png');
+                                const off = document.createElement('canvas');
+                                off.width = canvas.width; off.height = canvas.height;
+                                const ctx = off.getContext('2d');
+                                ctx.drawImage(canvas, 0, 0);
+                                ctx.globalCompositeOperation = 'destination-over';
+                                ctx.fillStyle = '#ffffff';
+                                ctx.fillRect(0, 0, off.width, off.height);
+                                try {
+                                    const imgData = ctx.getImageData(0, 0, off.width, off.height);
+                                    const data = imgData.data; const thr = 8;
+                                    for (let i = 0; i < data.length; i += 4) {
+                                        const r = data[i], g = data[i+1], b = data[i+2];
+                                        if (r < thr && g < thr && b < thr) { data[i] = 255; data[i+1] = 255; data[i+2] = 255; }
+                                    }
+                                    ctx.putImageData(imgData, 0, 0);
+                                } catch (e) {}
+                                const url = off.toDataURL('image/png');
                                 const a = document.createElement('a');
                                 a.href = url;
                                 a.download = 'pointcloud_view.png';
@@ -793,12 +809,12 @@ with gr.Blocks(
         outputs=[reconstruction_output, target_dir_output, image_gallery, log_output],
     )
 
-    def render_view_fn(target_dir, render_frame, conf_thres, mask_black_bg, mask_white_bg, show_cam, mask_sky, prediction_mode):
-        if not target_dir or target_dir == "None" or not os.path.isdir(target_dir):
-            return None
-        predictions_path = os.path.join(target_dir, "predictions.npz")
-        if not os.path.exists(predictions_path):
-            return None
+        def render_view_fn(target_dir, render_frame, conf_thres, mask_black_bg, mask_white_bg, show_cam, mask_sky, prediction_mode):
+            if not target_dir or target_dir == "None" or not os.path.isdir(target_dir):
+                return None
+            predictions_path = os.path.join(target_dir, "predictions.npz")
+            if not os.path.exists(predictions_path):
+                return None
         loaded = np.load(predictions_path)
         keys = [
             "pose_enc",
@@ -868,7 +884,7 @@ with gr.Blocks(
         lin_sorted = lin[order]
         first_idx = np.unique(lin_sorted, return_index=True)[1]
         sel = order[first_idx]
-        img = np.zeros((H, W, 3), dtype=np.uint8)
+        img = np.full((H, W, 3), 255, dtype=np.uint8)
         img_flat = img.reshape(-1, 3)
         img_flat[lin[sel]] = colors_v[sel]
         out_path = os.path.join(target_dir, f"render_view_{idx}.png")
@@ -944,7 +960,23 @@ with gr.Blocks(
             window.__rec_frames = [];
             const capture = ()=>{
                 try {
-                    const url = canvas.toDataURL('image/jpeg', 0.9);
+                    const off = document.createElement('canvas');
+                    off.width = canvas.width; off.height = canvas.height;
+                    const ctx = off.getContext('2d');
+                    ctx.drawImage(canvas, 0, 0);
+                    ctx.globalCompositeOperation = 'destination-over';
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, off.width, off.height);
+                    try {
+                        const imgData = ctx.getImageData(0, 0, off.width, off.height);
+                        const data = imgData.data; const thr = 8;
+                        for (let i = 0; i < data.length; i += 4) {
+                            const r = data[i], g = data[i+1], b = data[i+2];
+                            if (r < thr && g < thr && b < thr) { data[i] = 255; data[i+1] = 255; data[i+2] = 255; }
+                        }
+                        ctx.putImageData(imgData, 0, 0);
+                    } catch (e) {}
+                    const url = off.toDataURL('image/jpeg', 0.9);
                     window.__rec_frames.push(url);
                 } catch (e) {}
             };
