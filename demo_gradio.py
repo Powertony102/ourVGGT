@@ -518,36 +518,32 @@ with gr.Blocks(
                         <button style="padding:8px 12px; border-radius:6px; background:#0891b2; color:white; border:none; cursor:pointer;" onclick="
                             const viewer = document.getElementById('recon_viewer');
                             if (!viewer) { alert('Viewer not ready'); return; }
-                            let canvas = viewer.querySelector('canvas');
                             const mv = viewer.querySelector('model-viewer');
-                            if (!canvas && mv && mv.shadowRoot) {
-                                canvas = mv.shadowRoot.querySelector('canvas');
+                            if (mv && mv.toBlob) {
+                                mv.toBlob({mimeType: 'image/png'}).then((blob)=>{
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = 'pointcloud_view.png';
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    document.body.removeChild(a);
+                                    URL.revokeObjectURL(url);
+                                }).catch(()=>{ alert('Screenshot failed'); });
+                                return;
                             }
+                            let canvas = viewer.querySelector('canvas');
+                            if (!canvas && mv && mv.shadowRoot) { canvas = mv.shadowRoot.querySelector('canvas'); }
                             if (!canvas) { alert('Canvas not found'); return; }
                             try {
-                                const off = document.createElement('canvas');
-                                off.width = canvas.width; off.height = canvas.height;
-                                const ctx = off.getContext('2d');
-                                ctx.drawImage(canvas, 0, 0);
-                                try {
-                                    const imgData = ctx.getImageData(0, 0, off.width, off.height);
-                                    const data = imgData.data;
-                                    for (let i = 0; i < data.length; i += 4) {
-                                        const r = data[i], g = data[i+1], b = data[i+2];
-                                        if (r === 0 && g === 0 && b === 0) { data[i+3] = 0; }
-                                    }
-                                    ctx.putImageData(imgData, 0, 0);
-                                } catch (e) {}
-                                const url = off.toDataURL('image/png');
+                                const url = canvas.toDataURL('image/png');
                                 const a = document.createElement('a');
                                 a.href = url;
                                 a.download = 'pointcloud_view.png';
                                 document.body.appendChild(a);
                                 a.click();
                                 document.body.removeChild(a);
-                            } catch (e) {
-                                alert('Screenshot failed');
-                            }
+                            } catch (e) { alert('Screenshot failed'); }
                         ">导出当前视图截图</button>
                     </div>
                     """
@@ -881,7 +877,7 @@ with gr.Blocks(
         lin_sorted = lin[order]
         first_idx = np.unique(lin_sorted, return_index=True)[1]
         sel = order[first_idx]
-        img = np.full((H, W, 3), 255, dtype=np.uint8)
+        img = np.zeros((H, W, 3), dtype=np.uint8)
         img_flat = img.reshape(-1, 3)
         img_flat[lin[sel]] = colors_v[sel]
         out_path = os.path.join(target_dir, f"render_view_{idx}.png")
@@ -959,21 +955,20 @@ with gr.Blocks(
             window.__rec_frames = [];
             const capture = ()=>{
                 try {
-                    const off = document.createElement('canvas');
-                    off.width = canvas.width; off.height = canvas.height;
-                    const ctx = off.getContext('2d');
-                    ctx.drawImage(canvas, 0, 0);
-                    try {
-                        const imgData = ctx.getImageData(0, 0, off.width, off.height);
-                        const data = imgData.data;
-                        for (let i = 0; i < data.length; i += 4) {
-                            const r = data[i], g = data[i+1], b = data[i+2];
-                            if (r === 0 && g === 0 && b === 0) { data[i+3] = 0; }
-                        }
-                        ctx.putImageData(imgData, 0, 0);
-                    } catch (e) {}
-                    const url = off.toDataURL('image/png');
-                    window.__rec_frames.push(url);
+                    const mv = viewer.querySelector('model-viewer');
+                    if (mv && mv.toBlob) {
+                        mv.toBlob({mimeType: 'image/png'}).then((blob)=>{
+                            const r = new FileReader();
+                            r.onload = ()=>{ window.__rec_frames.push(r.result); };
+                            r.readAsDataURL(blob);
+                        }).catch(()=>{
+                            const url = canvas.toDataURL('image/png');
+                            window.__rec_frames.push(url);
+                        });
+                    } else {
+                        const url = canvas.toDataURL('image/png');
+                        window.__rec_frames.push(url);
+                    }
                 } catch (e) {}
             };
             if (window.__rec_timer) clearInterval(window.__rec_timer);
